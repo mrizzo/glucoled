@@ -3,6 +3,11 @@
 A tiny desk/car display for your [Nightscout](https://nightscout.github.io/) glucose:
 **just the number and the trend arrow**. No alarms, no graphs, no app.
 
+<p align="center">
+  <img src="docs/ideaspark.jpg" alt="Glucoled on the ideaspark ESP32 1.9-inch board showing 78 with a flat arrow" width="49%">
+  <img src="docs/tdisplay-s3.jpg" alt="Glucoled on the LilyGO T-Display S3 showing 78 with a flat arrow" width="49%">
+</p>
+
 - Number is **white** when fresh, **grey** when the latest reading is older than 11 minutes
   (or the board doesn't know the time yet), so a stale value never looks current.
 - Waits up to **15 seconds** for Nightscout to answer, so slow hosted sites (some take ~5 s
