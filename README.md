@@ -119,3 +119,7 @@ computed against NTP time.
 The HTTPS certificate isn't verified (`setInsecure()`), which keeps setup simple. The worst
 case is someone on your network showing you a fake number, so don't rely on it for
 treatment (see above).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
