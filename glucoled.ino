@@ -497,12 +497,33 @@ void drawClock() {
   lastClockMin = t.tm_min;
 }
 
-// Just the number and the trend arrow. White when fresh, grey when the reading is
+// Range colours, as in Loop Follow's time-in-range chart. Override the cut-offs in secrets.h.
+#ifndef RANGE_VERY_LOW
+#define RANGE_VERY_LOW  54     // below: very low
+#endif
+#ifndef RANGE_LOW
+#define RANGE_LOW       70     // below: low
+#endif
+#ifndef RANGE_HIGH
+#define RANGE_HIGH      180    // above: high
+#endif
+#ifndef RANGE_VERY_HIGH
+#define RANGE_VERY_HIGH 250    // above: very high
+#endif
+uint16_t rangeColour(int sgv) {
+  if (sgv < RANGE_VERY_LOW)   return tft.color565(255, 64, 64);   // very low: bright red
+  if (sgv < RANGE_LOW)        return tft.color565(200, 70, 70);   // low: deeper red
+  if (sgv <= RANGE_HIGH)      return tft.color565(103, 204, 99);  // in range: green
+  if (sgv <= RANGE_VERY_HIGH) return tft.color565(247, 216, 74);  // high: yellow
+  return tft.color565(240, 150, 76);                              // very high: orange
+}
+
+// Just the number and the trend arrow, coloured by range. Grey when the reading is
 // older than STALE_MIN (or the clock isn't set yet) - no alarms, no extra text.
 void render() {
   long age = ageMinutes();
   bool stale = (age < 0) || (age >= STALE_MIN);
-  uint16_t col = stale ? TFT_DARKGREY : TFT_WHITE;
+  uint16_t col = (stale || lastSgv < 0) ? TFT_DARKGREY : rangeColour(lastSgv);
 
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(col, TFT_BLACK);

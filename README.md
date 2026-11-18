@@ -9,8 +9,12 @@ straight from **Dexcom Share** (including Japanese Dexcom accounts):
   <img src="docs/tdisplay-s3.jpg" alt="Glucoled on the LilyGO T-Display S3 showing 78 with a flat arrow" width="49%">
 </p>
 
-- Number is **white** when fresh, **grey** when the latest reading is older than 11 minutes
-  (or the board doesn't know the time yet), so a stale value never looks current.
+- Number and arrow are **coloured by range**, like Loop Follow's time-in-range chart:
+  red under 54, darker red 54–69, green 70–180, yellow 181–250, orange over 250
+  (change the cut-offs with `RANGE_VERY_LOW`, `RANGE_LOW`, `RANGE_HIGH`, `RANGE_VERY_HIGH`
+  in `secrets.h`).
+- **Grey** when the latest reading is older than 11 minutes (or the board doesn't know the
+  time yet), so a stale value never looks current.
 - Waits up to **15 seconds** for Nightscout to answer, so slow hosted sites (some take ~5 s
   on a cold request) don't make it give up.
 - Shows the **time** (HH:MM) above the number, set from the internet, so it doubles as a desk clock.
