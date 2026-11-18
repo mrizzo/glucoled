@@ -6,6 +6,13 @@
 #define SECRET_WIFI_NETWORKS \
   {"YOUR_HOME_WIFI",    "YOUR_HOME_PASSWORD"}, \
   {"YOUR_HOTSPOT_NAME", "YOUR_HOTSPOT_PASSWORD"}
+// --- Data source: fill in ONE of these two blocks ---
+// Nightscout:
 #define SECRET_NS_HOST   "yoursite.example.com"   // your Nightscout host, no https://
 #define SECRET_NS_TOKEN  ""   // optional: leave empty if your site is readable without one
+// Dexcom Share (no Nightscout needed). Uncomment to use; it takes priority over Nightscout.
+// Use the sensor WEARER's Dexcom login (not a follower's), with Share turned on in the Dexcom app.
+// #define SECRET_DEXCOM_USER   "you@example.com"
+// #define SECRET_DEXCOM_PASS   "your-dexcom-password"
+// #define SECRET_DEXCOM_REGION "jp"   // "us", "ous" (outside the US) or "jp" (Japan)
 // #define SECRET_TZ "PST8PDT,M3.2.0,M11.1.0"   // optional clock time zone (default JST-9)

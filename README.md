@@ -1,6 +1,7 @@
 # Glucoled
 
-A tiny desk/car display for your [Nightscout](https://nightscout.github.io/) glucose:
+A tiny desk/car display for your glucose, from [Nightscout](https://nightscout.github.io/) or
+straight from **Dexcom Share** (including Japanese Dexcom accounts):
 **just the number and the trend arrow**. No alarms, no graphs, no app.
 
 <p align="center">
@@ -69,6 +70,14 @@ Edit `secrets.h`. It is gitignored, so it never gets committed.
 #define SECRET_NS_TOKEN  ""                        // see below
 ```
 
+And/or read Dexcom directly:
+
+```c
+#define SECRET_DEXCOM_USER   "you@example.com"
+#define SECRET_DEXCOM_PASS   "your-dexcom-password"
+#define SECRET_DEXCOM_REGION "jp"     // "us", "ous" (outside the US) or "jp" (Japan)
+```
+
 - **WiFi:** list one `{"name", "password"}` per line, ending every line except the last with
   `, \`. The board joins whichever listed network is strongest and switches if it drops.
   Emoji names work, but they must match byte for byte. Typing them as escapes avoids editor
@@ -80,6 +89,22 @@ Edit `secrets.h`. It is gitignored, so it never gets committed.
 - **Token:** leave it empty if your Nightscout site can be read without logging in (the
   default `AUTH_DEFAULT_ROLES=readable`). Otherwise create a token with the `readable` role
   under *Admin Tools → Subjects* and paste it here. Never use your API_SECRET.
+- **Sources:** set Nightscout, Dexcom, or both. With both, Nightscout is asked first (it's
+  usually fastest when an uploader like Trio/Loop/xDrip is running). If its reading is missing
+  or 6+ minutes old (the uploader missed one), Dexcom is asked too and the newer reading is
+  shown. A small **NS** or **D** in the top-right corner shows where the number came from.
+- **Dexcom:**
+  - Use the **sensor wearer's** Dexcom login, the one the Dexcom app is signed into, not a
+    follower's. **Share must be on** in the Dexcom app.
+  - Pick the region the account lives in. Japanese accounts only work with `"jp"` (many other
+    displays only know the US and international servers, so they reject Japanese logins).
+  - If the password contains `"` or `\`, put a backslash before it, e.g. `"pa\"ss"`.
+  - Your Dexcom **password is stored on the board**. Anyone with the board and a USB cable could
+    read it out, so treat the board like a key.
+  - This uses Dexcom's unofficial Share API (the one the Follow app uses, as in
+    [pydexcom](https://github.com/gagebenne/pydexcom)). Dexcom could change it at any time.
+  - If Dexcom rejects the login, Glucoled stops trying until you restart it, so a wrong password
+    can't lock your account.
 
 ### 3. Build and flash
 
@@ -102,8 +127,8 @@ It refreshes every 60 seconds.
 |---|---|
 | `board not found` | Use a data cable, or try another port/hub. |
 | Stuck on "Connecting WiFi..." | Check the WiFi name/password (exact spelling), and that it's 2.4 GHz. |
-| `--` instead of a number | WiFi works, but Nightscout didn't answer: check `SECRET_NS_HOST` and the token. |
-| Number is always grey | Your uploader hasn't sent a reading for 11+ minutes. Check Nightscout itself. |
+| `--` instead of a number | WiFi works, but the data source didn't answer. Open the debug page (below) for the reason. Nightscout: check `SECRET_NS_HOST` and the token. Dexcom: check the login, region and that Share is on. |
+| Number is always grey | No new reading for 11+ minutes. Check Nightscout itself, or that the Dexcom app is running and sharing. |
 | Colours inverted (ideaspark) | In `board_ideaspark_19.h`, swap `TFT_INVERSION_ON` for `TFT_INVERSION_OFF`. |
 
 ## Debugging
@@ -140,13 +165,15 @@ If the board gates display power on a pin (like the T-Display S3's GPIO15), defi
 
 ## How it works
 
-Every 60 s it requests `https://<host>/api/v1/entries/sgv.json?count=1`. The JSON parser
-keeps only `sgv`, `date` and `direction` and discards the rest as it streams in. The age is
-computed against NTP time.
+Every 60 s it fetches the latest reading and computes its age against NTP time.
 
-The HTTPS certificate isn't verified (`setInsecure()`), which keeps setup simple. The worst
-case is someone on your network showing you a fake number, so don't rely on it for
-treatment (see above).
+- **Nightscout:** `https://<host>/api/v1/entries/sgv.json?count=1`, keeping only `sgv`, `date`
+  and `direction`. The certificate isn't verified (`setInsecure()`), which keeps setup simple.
+  The worst case is someone on your network showing you a fake number, so don't rely on it for
+  treatment (see above).
+- **Dexcom Share:** logs in once (account ID, then session ID), then reads the latest value with
+  that session until it expires. Because this sends your password, the server certificate
+  **is** verified, against the root CAs in `dexcom_roots.h`.
 
 ## License
 

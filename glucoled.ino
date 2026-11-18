@@ -22,6 +22,7 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include "secrets.h"
+#include "dexcom_roots.h"
 
 // ---------------- EDIT THESE ----------------
 struct WifiNet { const char* ssid; const char* pass; };
@@ -30,8 +31,27 @@ const WifiNet WIFI_NETWORKS[] = { SECRET_WIFI_NETWORKS };
 #else                                             // older secrets.h with a single network
 const WifiNet WIFI_NETWORKS[] = { {SECRET_WIFI_SSID, SECRET_WIFI_PASS} };
 #endif
+// Data source: Dexcom Share if SECRET_DEXCOM_USER/PASS are set, otherwise Nightscout.
+#ifndef SECRET_NS_HOST
+#define SECRET_NS_HOST ""
+#endif
+#ifndef SECRET_NS_TOKEN
+#define SECRET_NS_TOKEN ""
+#endif
 const char*    NS_HOST   = SECRET_NS_HOST;
 const char*    NS_TOKEN  = SECRET_NS_TOKEN;        // read-only token is enough
+#if defined(SECRET_DEXCOM_USER) && defined(SECRET_DEXCOM_PASS)
+const char*    DEX_USER  = SECRET_DEXCOM_USER;     // the sensor wearer's account, not a follower
+const char*    DEX_PASS  = SECRET_DEXCOM_PASS;
+#else
+const char*    DEX_USER  = "";
+const char*    DEX_PASS  = "";
+#endif
+#ifdef SECRET_DEXCOM_REGION
+const char*    DEX_REGION = SECRET_DEXCOM_REGION;  // "us", "ous" (outside US) or "jp" (Japan)
+#else
+const char*    DEX_REGION = "us";
+#endif
 const char*    HOSTNAME  = "Glucoled";         // name shown in your router / Deco app
 const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
@@ -41,7 +61,7 @@ const char*    TZ_INFO         = SECRET_TZ;     // POSIX TZ string, e.g. "PST8PD
 #else
 const char*    TZ_INFO         = "JST-9";       // clock time zone (Japan, no DST)
 #endif
-const char*    FW_VERSION      = "0.3";
+const char*    FW_VERSION      = "0.4";
 #ifndef BOARD_BUTTON
 #define BOARD_BUTTON 0                             // BOOT button on most ESP32 boards
 #endif
@@ -57,16 +77,21 @@ WiFiMulti wifiMulti;                               // joins whichever known netw
 int    lastSgv     = -1;
 int64_t lastDateMs = 0;                            // ms since 1970: too big for a 32-bit long
 String lastDir     = "NONE";
+const char* lastSrc = "";                          // where the shown reading came from: "NS" or "D"
+struct Reading { int sgv = -1; int64_t dateMs = 0; String dir = "NONE"; };
+Reading got;                                       // filled by nsFetch()/dexFetch()
 uint32_t lastPoll  = 0;
 int    lastClockMin = -1;                          // minute last drawn, so the clock redraws once a minute
 const int CLOCK_H  = 34;                           // clock strip at the top of the screen
 
 // ---- diagnostics (shown on the debug page) ----
-int      nsCode     = 0;                           // last HTTP code (negative = HTTPClient error)
-uint32_t nsMs       = 0;                           // how long the last fetch took
-uint32_t nsAt       = 0;                           // millis() of the last fetch
-String   nsErr      = "";                          // why the last fetch failed ("" = ok)
-uint32_t nsOk = 0, nsFail = 0;
+int      nsCode     = 0;                           // scratch: HTTP code of the source being fetched
+String   nsErr      = "";                          // scratch: why it failed ("" = ok)
+struct SrcStat { int code = 0; uint32_t ms = 0, at = 0, ok = 0, fail = 0; String err; };
+SrcStat  nsStat, dexStat;                          // per source, for the debug page
+#ifndef DEX_BACKUP_MIN
+#define DEX_BACKUP_MIN 6                           // ask Dexcom when Nightscout's reading is this old
+#endif
 bool     debugPage  = false;
 uint32_t debugAt    = 0;
 
@@ -164,6 +189,8 @@ void bleStop() {
 }
 
 bool usable(const char* s) { return strlen(s) && strncmp(s, "YOUR_", 5) != 0; }
+bool useDexcom() { return usable(DEX_USER) && usable(DEX_PASS); }
+bool useNs()     { return usable(NS_HOST); }
 
 void addNetworks() {
   WiFi.setHostname(HOSTNAME);                      // must be set before WiFi starts
@@ -186,34 +213,69 @@ void connectWiFi() {
     logf("wifi: no known network after %lu ms", millis() - t0);
 }
 
-bool fetchOnce();
-bool fetch() {
+bool nsFetch();
+bool dexFetch();
+long ageOf(int64_t dateMs);
+bool fetchNoRetry = false;                         // set for errors a retry can't fix (bad login, no clock)
+
+// Fetch one source into `got`, with one quick retry, and record its stats.
+bool runSource(bool dex) {
+  SrcStat& st = dex ? dexStat : nsStat;
+  const char* tag = dex ? "dex" : "ns";
   uint32_t t0 = millis();
-  nsCode = 0; nsErr = "";
-  bool ok = fetchOnce();
-  if (!ok && WiFi.status() == WL_CONNECTED) {      // one quick retry: a single blip shouldn't cost a minute
-    logf("ns: retry after: %s", nsErr.c_str());
+  got = Reading(); nsCode = 0; nsErr = ""; fetchNoRetry = false;
+  bool ok = dex ? dexFetch() : nsFetch();
+  if (!ok && !fetchNoRetry && WiFi.status() == WL_CONNECTED) {  // a blip shouldn't cost a minute
+    logf("%s: retry after: %s", tag, nsErr.c_str());
     delay(2000);
-    nsCode = 0; nsErr = "";
-    ok = fetchOnce();
+    got = Reading(); nsCode = 0; nsErr = ""; fetchNoRetry = false;
+    ok = dex ? dexFetch() : nsFetch();
   }
-  nsMs = millis() - t0; nsAt = millis();
+  st.ms = millis() - t0; st.at = millis(); st.code = nsCode; st.err = ok ? "" : nsErr;
   if (ok) {
-    nsOk++;
-    long age = ageMinutes();
-    logf("ns: %d in %lu ms -> %d %s, age %ld min", nsCode, nsMs, lastSgv, lastDir.c_str(), age);
+    st.ok++;
+    logf("%s: %d in %lu ms -> %d %s, age %ld min", tag, nsCode, st.ms, got.sgv, got.dir.c_str(), ageOf(got.dateMs));
   } else {
-    nsFail++;
-    logf("ns: FAIL after %lu ms: %s (keeping last value)", nsMs, nsErr.c_str());
+    st.fail++;
+    logf("%s: FAIL after %lu ms: %s", tag, st.ms, nsErr.c_str());
   }
   return ok;
 }
 
-bool fetchOnce() {
+// Nightscout first (fast when the uploader is working). If its reading is missing or
+// DEX_BACKUP_MIN+ minutes old (uploader missed one), also ask Dexcom, and show the newer.
+// With only one source set, just that one is used.
+bool fetch() {
   if (WiFi.status() != WL_CONNECTED) {
     connectWiFi();
-    if (WiFi.status() != WL_CONNECTED) { nsErr = "no wifi"; return false; }
+    if (WiFi.status() != WL_CONNECTED) { logf("fetch: no wifi"); return false; }
   }
+  if (!useNs() && !useDexcom()) { logf("fetch: no data source in secrets.h"); return false; }
+
+  Reading ns, dx;
+  bool nsOk = false, dxOk = false;
+  if (useNs() && (nsOk = runSource(false))) ns = got;
+  long nsAge = nsOk ? ageOf(ns.dateMs) : -1;
+  if (useDexcom() && (!nsOk || nsAge < 0 || nsAge >= DEX_BACKUP_MIN)) {
+    if (useNs()) logf("dex: asking Dexcom, Nightscout %s", nsOk ? (String("reading is ") + nsAge + " min old").c_str() : "failed");
+    if ((dxOk = runSource(true))) dx = got;
+  }
+
+  const Reading* best = nullptr; const char* src = "";
+  if (nsOk) { best = &ns; src = "NS"; }
+  // Same reading from both sources has slightly different timestamps, so Dexcom must be a
+  // minute newer to win; otherwise prefer Nightscout.
+  if (dxOk && (!best || dx.dateMs > best->dateMs + 60000)) { best = &dx; src = "D"; }
+  if (!best) { logf("fetch: no source answered (keeping last value)"); return false; }
+  if (best->dateMs >= lastDateMs) {                // never step back to an older reading
+    if (strcmp(src, lastSrc)) logf("show: now from %s", src);
+    lastSgv = best->sgv; lastDateMs = best->dateMs; lastDir = best->dir; lastSrc = src;
+  }
+  return true;
+}
+
+// ---------------- Nightscout ----------------
+bool nsFetch() {
   tls.setInsecure();                               // skip cert checks (simple + robust)
   HTTPClient http;
   String url = String("https://") + NS_HOST + "/api/v1/entries/sgv.json?count=1";
@@ -244,17 +306,153 @@ bool fetchOnce() {
   if (arr.size() < 1) { nsErr = "no entries"; return false; }
   int sgv0 = arr[0]["sgv"] | -1;
   if (sgv0 < 0) { nsErr = "no sgv"; return false; }
-  lastSgv    = sgv0;
-  lastDateMs = arr[0]["date"] | (int64_t)0;
-  lastDir    = String((const char*)(arr[0]["direction"] | "NONE"));
+  got.sgv    = sgv0;
+  got.dateMs = arr[0]["date"] | (int64_t)0;
+  got.dir    = String((const char*)(arr[0]["direction"] | "NONE"));
   return true;
 }
 
-long ageMinutes() {
-  time_t now = time(nullptr);
-  if (now < 1000000000L || lastDateMs == 0) return -1;   // NTP not ready
-  return (long)(((int64_t)now - lastDateMs / 1000) / 60);
+// ---------------- Dexcom Share ----------------
+// The unofficial API the Dexcom Follow app uses (same flow as pydexcom): authenticate -> account
+// ID, log in -> session ID, then read the latest value. The session is reused until it expires.
+// This sends the Dexcom PASSWORD, so unlike Nightscout the server certificate IS verified.
+String   dexAccountId, dexSessionId;               // never logged
+bool     dexLoginLocked  = false;                  // login refused: stop trying (avoids locking the account)
+uint32_t dexLoginRetryAt = 0;
+
+const char* dexHost() {
+  if (!strcmp(DEX_REGION, "jp"))  return "share.dexcom.jp";
+  if (!strcmp(DEX_REGION, "ous")) return "shareous1.dexcom.com";
+  return "share2.dexcom.com";
 }
+const char* dexAppId() {                           // Japan has its own application ID
+  return !strcmp(DEX_REGION, "jp") ? "d8665ade-9673-4e27-9ff6-92db4ce13d13"
+                                   : "d89443d2-327c-4a6f-89e5-496bbb0317db";
+}
+
+int dexPost(const String& path, const String& body, String& out) {
+  WiFiClientSecure c;
+  c.setCACert(DEXCOM_ROOT_CAS);                    // verify: we're sending a password
+  HTTPClient http;
+  out = "";
+  if (!http.begin(c, String("https://") + dexHost() + "/ShareWebServices/Services/" + path)) return -100;
+  // Handshake takes ~1 s. Right after a cold boot the first connect sometimes stalls (seen
+  // only while the clock was just set), so give up sooner and let the retry handle it.
+  http.setConnectTimeout(8000);
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Accept", "application/json");
+  int code = http.POST(body);
+  if (code > 0) out = http.getString();
+  else {                                           // log why TLS/connect failed (cert, DNS, memory...)
+    char e[100] = "";
+    int te = c.lastError(e, sizeof e);
+    logf("dex: connect to %s failed: %s (tls %d: %s, heap %u)", dexHost(),
+         HTTPClient::errorToString(code).c_str(), te, e, ESP.getFreeHeap());
+  }
+  http.end();
+  return code;
+}
+
+String jsonString(const String& body) {            // Share returns IDs as a bare JSON string
+  JsonDocument d;
+  if (deserializeJson(d, body)) return "";
+  const char* v = d.as<const char*>();
+  return v ? String(v) : "";
+}
+String dexErrCode(const String& body) {            // {"Code":"SessionIdNotFound","Message":...}
+  JsonDocument d;
+  if (deserializeJson(d, body) || !d.is<JsonObject>()) return "";
+  return String((const char*)(d["Code"] | ""));
+}
+bool validId(const String& id) { return id.length() == 36 && !id.startsWith("00000000-"); }
+
+bool dexLoginFailed(int code, const String& out) {
+  String c = dexErrCode(out);
+  nsCode = code; fetchNoRetry = true;
+  if (code == 500 && c.length()) {                 // Dexcom said no: wrong user/password/region, or locked
+    dexLoginLocked = true;
+    nsErr = "Dexcom login refused (" + c + "). Check user/password/region, then restart";
+  } else if (code == 200) {                        // all-zero ID: account exists but can't share
+    dexLoginLocked = true;
+    nsErr = "Dexcom login gave no session: wrong region, or Share is off";
+  } else if (code < 0) {                           // never reached Dexcom: can't affect the account,
+    nsErr = "Dexcom unreachable (" + HTTPClient::errorToString(code) + ")";
+    fetchNoRetry = false;                          // so the normal quick retry is fine
+  } else {                                         // server trouble: try again later
+    dexLoginRetryAt = millis() + 5UL * 60 * 1000;
+    nsErr = "Dexcom login failed (" + (code < 0 ? HTTPClient::errorToString(code) : String("HTTP ") + code) +
+            "), retry in 5 min";
+  }
+  return false;
+}
+
+bool dexLogin() {
+  if (dexLoginLocked) { nsErr = "Dexcom login refused earlier. Fix secrets.h, then restart"; fetchNoRetry = true; return false; }
+  if ((int32_t)(millis() - dexLoginRetryAt) < 0 && dexLoginRetryAt) { nsErr = "Dexcom login: waiting to retry"; fetchNoRetry = true; return false; }
+  String body, out;
+  JsonDocument req;
+  if (!validId(dexAccountId)) {
+    req["accountName"] = DEX_USER; req["password"] = DEX_PASS; req["applicationId"] = dexAppId();
+    serializeJson(req, body);
+    int code = dexPost("General/AuthenticatePublisherAccount", body, out);
+    dexAccountId = code == 200 ? jsonString(out) : "";
+    if (!validId(dexAccountId)) { dexAccountId = ""; return dexLoginFailed(code, out); }
+  }
+  req.clear(); body = "";
+  req["accountId"] = dexAccountId; req["password"] = DEX_PASS; req["applicationId"] = dexAppId();
+  serializeJson(req, body);
+  int code = dexPost("General/LoginPublisherAccountById", body, out);
+  String sid = code == 200 ? jsonString(out) : "";
+  if (!validId(sid)) return dexLoginFailed(code, out);
+  dexSessionId = sid;
+  logf("dex: logged in (%s)", dexHost());
+  return true;
+}
+
+bool dexFetch() {
+  if (time(nullptr) < 1000000000L) {               // certificate dates can't be checked without a clock
+    nsErr = "waiting for clock"; fetchNoRetry = true; return false;
+  }
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (!validId(dexSessionId) && !dexLogin()) return false;
+    String out;
+    // Latest value from the last 24 h, so an old reading still shows (grey) with its real age.
+    int code = dexPost("Publisher/ReadPublisherLatestGlucoseValues?sessionId=" + dexSessionId +
+                       "&minutes=1440&maxCount=1", "{}", out);
+    nsCode = code;
+    if (code == 200) {
+      JsonDocument doc;
+      if (deserializeJson(doc, out)) { nsErr = "json"; return false; }
+      JsonArray a = doc.as<JsonArray>();
+      if (a.size() < 1) { nsErr = "no reading in 24 h (is Share on?)"; return false; }
+      int v = a[0]["Value"] | -1;
+      const char* wt = a[0]["WT"] | "";            // "Date(1763430000000)" = UTC ms
+      const char* p = strchr(wt, '(');
+      int64_t ms = p ? strtoll(p + 1, nullptr, 10) : 0;
+      if (v < 0 || ms == 0) { nsErr = "unexpected reading format"; return false; }
+      got.sgv = v; got.dateMs = ms;
+      got.dir = String((const char*)(a[0]["Trend"] | "NONE"));   // same names as Nightscout
+      return true;
+    }
+    String c = dexErrCode(out);
+    if (attempt == 0 && (c == "SessionIdNotFound" || c == "SessionNotValid")) {
+      logf("dex: session expired, logging in again");
+      dexSessionId = "";
+      continue;
+    }
+    nsErr = code < 0 ? HTTPClient::errorToString(code) : "HTTP " + String(code) + (c.length() ? " " + c : "");
+    return false;
+  }
+  return false;
+}
+
+long ageOf(int64_t dateMs) {
+  time_t now = time(nullptr);
+  if (now < 1000000000L || dateMs == 0) return -1;      // NTP not ready
+  return (long)(((int64_t)now - dateMs / 1000) / 60);
+}
+long ageMinutes() { return ageOf(lastDateMs); }
 
 void drawArrow(int cx, int cy, const String& dir, uint16_t col) {
   float a = 0;
@@ -282,6 +480,11 @@ void drawClock() {
     tft.setTextFont(2); tft.setTextSize(1); tft.setTextDatum(TL_DATUM);
     tft.setTextColor(bleConnected ? TFT_CYAN : TFT_BLUE, TFT_BLACK);
     tft.drawString("BT", 6, 6);
+  }
+  if (lastSrc[0]) {                                // where the number came from: NS or D (Dexcom)
+    tft.setTextFont(2); tft.setTextSize(1); tft.setTextDatum(TR_DATUM);
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.drawString(lastSrc, tft.width() - 6, 6);
   }
   if (now < 1000000000L) { lastClockMin = -1; return; }  // NTP not ready: show nothing
   localtime_r(&now, &t);
@@ -311,7 +514,11 @@ void render() {
   tft.drawString(lastSgv < 0 ? "--" : String(lastSgv), numRight, cy);
   tft.setTextSize(1);
 
-  if (lastSgv >= 0) {
+  static const char* KNOWN[] = {"DoubleUp", "SingleUp", "FortyFiveUp", "Flat",
+                                 "FortyFiveDown", "SingleDown", "DoubleDown"};
+  bool knownDir = false;
+  for (const char* k : KNOWN) if (lastDir == k) knownDir = true;
+  if (lastSgv >= 0 && knownDir) {                  // no arrow when the trend is unknown
     int ax = tft.width() - 45, ay = cy;
     bool dbl = (lastDir == "DoubleUp" || lastDir == "DoubleDown");
     drawArrow(dbl ? ax - 12 : ax, ay, lastDir, col);
@@ -353,14 +560,21 @@ void drawDebug() {
     line(TFT_RED, "WiFi  not connected");
     line(TFT_WHITE, "");
   }
-  if (nsAt == 0) line(TFT_WHITE, "NS    no fetch yet");
-  else line(nsErr.length() ? TFT_RED : TFT_GREEN,
-            "NS    " + (nsErr.length() ? nsErr : String(nsCode)) + " in " + String(nsMs / 1000.0, 1) +
-            "s, " + ago(millis() - nsAt) + " ago");
-  line(TFT_WHITE, "Fetches  " + String(nsOk) + " ok / " + String(nsFail) + " failed");
+  auto srcLine = [&](const char* tag, bool on, const SrcStat& st, const char* idle) {
+    if (!on) line(TFT_DARKGREY, String(tag) + "not set");
+    else if (st.at == 0) line(TFT_WHITE, String(tag) + idle);
+    else line(st.err.length() ? TFT_RED : TFT_GREEN,
+              String(tag) + (st.err.length() ? st.err : String(st.code)) + " in " +
+              String(st.ms / 1000.0, 1) + "s, " + ago(millis() - st.at) + " ago");
+  };
+  srcLine("NS    ", useNs(), nsStat, "no fetch yet");
+  srcLine("Dex   ", useDexcom(), dexStat, useNs() ? "backup, not needed yet" : "no fetch yet");
+  line(TFT_WHITE, "OK/fail  NS " + String(nsStat.ok) + "/" + String(nsStat.fail) +
+                  "   Dex " + String(dexStat.ok) + "/" + String(dexStat.fail));
   long age = ageMinutes();
   line(TFT_WHITE, "Reading  " + (lastSgv < 0 ? String("--") : String(lastSgv) + " " + lastDir) +
-                  (age < 0 ? String("") : ", " + String(age) + " min old"));
+                  (age < 0 ? String("") : ", " + String(age) + "m old") +
+                  (lastSrc[0] ? String(", ") + lastSrc : String("")));
   line(TFT_WHITE, "Up " + ago(millis()) + "   heap " + String(ESP.getFreeHeap() / 1024) + " KB");
   String bt = !bleOn ? String("off (hold button 2s)")
             : bleConnected ? "connected"
@@ -415,9 +629,14 @@ void setup() {
   tft.setTextDatum(TL_DATUM);
   tft.drawString("Connecting WiFi...", 10, 10);
   logf("boot: Glucoled %s on %s, reset: %s", FW_VERSION, ARDUINO_BOARD, resetReason());
+  if (useNs() && useDexcom()) logf("source: Nightscout, Dexcom (%s) as backup", DEX_REGION);
+  else if (useDexcom())       logf("source: Dexcom Share, region %s", DEX_REGION);
+  else                        logf("source: Nightscout");
   addNetworks();
   connectWiFi();
   configTzTime(TZ_INFO, "pool.ntp.org", "time.google.com");  // age uses the UTC epoch; TZ only affects the clock
+  if (useDexcom())                                 // Dexcom's certificate check needs the date
+    for (uint32_t t0 = millis(); time(nullptr) < 1000000000L && millis() - t0 < 10000; ) delay(100);
   fetch();
   render();                                        // shows "--" if the first fetch failed
   lastPoll = millis();
