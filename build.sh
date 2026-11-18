@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 BOARD="${BOARD:-ideaspark}"
 case "$BOARD" in
   ideaspark)  HDR=board_ideaspark_19.h; FQBN="esp32:esp32:esp32:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB" ;;
-  tdisplays3) HDR=board_tdisplay_s3.h;  FQBN="esp32:esp32:lilygo_t_display_s3:PartitionScheme=app3M_fat9M_16MB" ;;
+  tdisplays3) HDR=board_tdisplay_s3.h;  FQBN="esp32:esp32:lilygo_t_display_s3:CDCOnBoot=cdc,PartitionScheme=app3M_fat9M_16MB" ;;
   *) echo "unknown BOARD=$BOARD (ideaspark | tdisplays3)"; exit 1 ;;
 esac
 FLAGS="-include $(pwd)/$HDR"

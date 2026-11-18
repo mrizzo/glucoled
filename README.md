@@ -106,6 +106,26 @@ It refreshes every 60 seconds.
 | Number is always grey | Your uploader hasn't sent a reading for 11+ minutes. Check Nightscout itself. |
 | Colours inverted (ideaspark) | In `board_ideaspark_19.h`, swap `TFT_INVERSION_ON` for `TFT_INVERSION_OFF`. |
 
+## Debugging
+
+Three ways to see what it's doing. None of them open a network port.
+
+- **USB log:** plug it into a computer and run
+  `arduino-cli monitor -p <port> -c baudrate=115200`. It shows WiFi joins and drops, each Nightscout
+  fetch (HTTP code, how long it took, the reading) and why a fetch failed.
+- **Debug page:** a **short press** of the BOOT button (GPIO0; on the T-Display S3, the lower orange button with the screen landscape and USB on the right) switches to a status screen: WiFi network, signal and
+  IP, the last Nightscout result and timing, fetch counts, uptime and free memory. Press again,
+  or wait 2 minutes, to go back.
+- **Bluetooth log:** **hold** the BOOT button for 2 seconds. A blue `BT` appears top-left, and for
+  10 minutes the board advertises as "Glucoled". In *Bluefruit Connect* (iOS/Android), tap
+  Glucoled, then **UART**. On Android, *Serial Bluetooth Terminal* also works. You get the last 40
+  log lines and then live ones. (Generic BLE apps like *nRF Connect* show only raw packets, and
+  their "parsers" decode the text as nonsense heart-rate or glucose values.) It's read-only and stays on while a phone is connected.
+  Hold the button again to turn it off.
+
+The log never includes your token, Nightscout address or WiFi passwords. It does include
+WiFi network names.
+
 ## Adding another board
 
 Any ESP32 with a display supported by [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) should work:
