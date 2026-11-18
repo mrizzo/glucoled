@@ -5,8 +5,8 @@ straight from **Dexcom Share** (including Japanese Dexcom accounts):
 **just the number and the trend arrow**. No alarms, no graphs, no app.
 
 <p align="center">
-  <img src="docs/ideaspark.jpg" alt="Glucoled on the ideaspark ESP32 1.9-inch board showing 78 with a flat arrow" width="49%">
-  <img src="docs/tdisplay-s3.jpg" alt="Glucoled on the LilyGO T-Display S3 showing 78 with a flat arrow" width="49%">
+  <img src="docs/ideaspark.jpg" alt="Glucoled on the ideaspark ESP32 1.9-inch board on a desk, showing 19:04, NS and a green 93 with a flat arrow" width="49%">
+  <img src="docs/tdisplay-s3.jpg" alt="Glucoled on a LilyGO T-Display S3 mounted on a motorcycle dash at night, showing a green 96 with a flat arrow" width="49%">
 </p>
 
 - Number and arrow are **coloured by range**, like Loop Follow's time-in-range chart:
