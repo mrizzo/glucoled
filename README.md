@@ -12,6 +12,7 @@ A tiny desk/car display for your [Nightscout](https://nightscout.github.io/) glu
   (or the board doesn't know the time yet), so a stale value never looks current.
 - Waits up to **15 seconds** for Nightscout to answer, so slow hosted sites (some take ~5 s
   on a cold request) don't make it give up.
+- Shows the **time** (HH:MM) above the number, set from the internet, so it doubles as a desk clock.
 - Remembers **several WiFi networks**, e.g. home + your phone's hotspot for the car.
 - Total cost is the board: about ¥2,000 / US$15.
 
@@ -74,6 +75,8 @@ Edit `secrets.h`. It is gitignored, so it never gets committed.
   trouble, e.g. `"\U0001F422"` for 🐢.
 - **iPhone hotspot:** the ESP32 only does 2.4 GHz WiFi. Turn on
   *Settings → Personal Hotspot → Maximize Compatibility*, or the board won't see it.
+- **Time zone:** the clock defaults to Japan (`JST-9`). Elsewhere, add a POSIX TZ string, e.g.
+  `#define SECRET_TZ "PST8PDT,M3.2.0,M11.1.0"` (US Pacific) or `"GMT0BST,M3.5.0/1,M10.5.0"` (UK).
 - **Token:** leave it empty if your Nightscout site can be read without logging in (the
   default `AUTH_DEFAULT_ROLES=readable`). Otherwise create a token with the `readable` role
   under *Admin Tools → Subjects* and paste it here. Never use your API_SECRET.

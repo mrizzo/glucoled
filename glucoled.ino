@@ -32,6 +32,11 @@ const char*    HOSTNAME  = "Glucoled";         // name shown in your router / De
 const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
 const int      STALE_MIN       = 11;            // minutes old before it's flagged OLD
+#ifdef SECRET_TZ
+const char*    TZ_INFO         = SECRET_TZ;     // POSIX TZ string, e.g. "PST8PDT,M3.2.0,M11.1.0"
+#else
+const char*    TZ_INFO         = "JST-9";       // clock time zone (Japan, no DST)
+#endif
 // --------------------------------------------
 
 TFT_eSPI tft = TFT_eSPI();
@@ -42,6 +47,8 @@ int    lastSgv     = -1;
 long   lastDateMs  = 0;
 String lastDir     = "NONE";
 uint32_t lastPoll  = 0;
+int    lastClockMin = -1;                          // minute last drawn, so the clock redraws once a minute
+const int CLOCK_H  = 34;                           // clock strip at the top of the screen
 
 bool usable(const char* s) { return strlen(s) && strncmp(s, "YOUR_", 5) != 0; }
 
@@ -115,6 +122,22 @@ void drawArrow(int cx, int cy, const String& dir, uint16_t col) {
                    x2 - (int)(cos(rad + 0.5) * h), y2 + (int)(sin(rad + 0.5) * h), col);
 }
 
+// Small HH:MM clock across the top. Redraws only its own strip, so the number doesn't flicker.
+void drawClock() {
+  struct tm t;
+  time_t now = time(nullptr);
+  tft.fillRect(0, 0, tft.width(), CLOCK_H, TFT_BLACK);
+  if (now < 1000000000L) { lastClockMin = -1; return; }  // NTP not ready: show nothing
+  localtime_r(&now, &t);
+  char buf[6];
+  snprintf(buf, sizeof buf, "%02d:%02d", t.tm_hour, t.tm_min);
+  tft.setTextFont(4); tft.setTextSize(1);
+  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+  tft.setTextDatum(TC_DATUM);
+  tft.drawString(buf, tft.width() / 2, 6);
+  lastClockMin = t.tm_min;
+}
+
 // Just the number and the trend arrow. White when fresh, grey when the reading is
 // older than STALE_MIN (or the clock isn't set yet) - no alarms, no extra text.
 void render() {
@@ -128,15 +151,17 @@ void render() {
   tft.setTextSize(2);                              // ...doubled to 96px
   tft.setTextDatum(MR_DATUM);
   int numRight = tft.width() - 90;                 // leave room on the right for the arrow
-  tft.drawString(lastSgv < 0 ? "--" : String(lastSgv), numRight, tft.height() / 2);
+  int cy = (tft.height() + CLOCK_H) / 2;          // centred in the space below the clock
+  tft.drawString(lastSgv < 0 ? "--" : String(lastSgv), numRight, cy);
   tft.setTextSize(1);
 
   if (lastSgv >= 0) {
-    int ax = tft.width() - 45, ay = tft.height() / 2;
+    int ax = tft.width() - 45, ay = cy;
     bool dbl = (lastDir == "DoubleUp" || lastDir == "DoubleDown");
     drawArrow(dbl ? ax - 12 : ax, ay, lastDir, col);
     if (dbl) drawArrow(ax + 12, ay, lastDir, col);  // two arrows for fast rise/fall
   }
+  drawClock();
 }
 
 void setup() {
@@ -152,7 +177,7 @@ void setup() {
   tft.drawString("Connecting WiFi...", 10, 10);
   addNetworks();
   connectWiFi();
-  configTime(0, 0, "pool.ntp.org", "time.google.com");   // UTC epoch for age
+  configTzTime(TZ_INFO, "pool.ntp.org", "time.google.com");  // age uses the UTC epoch; TZ only affects the clock
   if (fetch()) render();
   lastPoll = millis();
 }
@@ -163,5 +188,7 @@ void loop() {
     fetch();        // if it fails, we keep the last value and the age flags it OLD
     render();
   }
+  time_t now = time(nullptr);                      // tick the clock when the minute changes
+  if (now >= 1000000000L) { struct tm t; localtime_r(&now, &t); if (t.tm_min != lastClockMin) drawClock(); }
   delay(50);
 }

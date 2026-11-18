@@ -8,4 +8,4 @@
   {"YOUR_HOTSPOT_NAME", "YOUR_HOTSPOT_PASSWORD"}
 #define SECRET_NS_HOST   "yoursite.example.com"   // your Nightscout host, no https://
 #define SECRET_NS_TOKEN  ""   // optional: leave empty if your site is readable without one
-
+// #define SECRET_TZ "PST8PDT,M3.2.0,M11.1.0"   // optional clock time zone (default JST-9)
