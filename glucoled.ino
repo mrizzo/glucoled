@@ -11,6 +11,9 @@
 // Board package: "esp32 by Espressif Systems". Select your board, flash over USB-C.
 
 #include <WiFi.h>
+#include <FS.h>
+#include <WebServer.h>                             // setup page only (setup_page.ino); before TFT_eSPI
+#include <DNSServer.h>
 #include <WiFiMulti.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -21,51 +24,98 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLE2902.h>
-#include "secrets.h"
+#include <Preferences.h>
+#include <qrcode.h>                                // ESP-IDF QR encoder, part of the ESP32 core
+#if __has_include("secrets.h")                     // optional: compiled-in defaults for developers.
+#include "secrets.h"                               // Normally everything is set on the setup page.
+#endif
 #include "dexcom_roots.h"
 
-// ---------------- EDIT THESE ----------------
+// ---------------- settings ----------------
+// Saved on the board by the setup page (hold the button 6 s). Until something is saved there,
+// the defaults from secrets.h (if any) are used.
+const int MAX_NETS = 4;
+struct Config {
+  String ssid[MAX_NETS], pass[MAX_NETS];           // WiFi networks, joined strongest-first
+  String nsHost, nsToken;                          // Nightscout (token optional, read-only is enough)
+  String dexUser, dexPass, dexRegion = "us";       // Dexcom Share: the sensor WEARER's login
+  String tz = "JST-9";                             // POSIX time zone for the clock
+} cfg;
+
 struct WifiNet { const char* ssid; const char* pass; };
-#ifdef SECRET_WIFI_NETWORKS                       // list of networks from secrets.h
-const WifiNet WIFI_NETWORKS[] = { SECRET_WIFI_NETWORKS };
-#else                                             // older secrets.h with a single network
-const WifiNet WIFI_NETWORKS[] = { {SECRET_WIFI_SSID, SECRET_WIFI_PASS} };
-#endif
-// Data source: Dexcom Share if SECRET_DEXCOM_USER/PASS are set, otherwise Nightscout.
-#ifndef SECRET_NS_HOST
-#define SECRET_NS_HOST ""
-#endif
-#ifndef SECRET_NS_TOKEN
-#define SECRET_NS_TOKEN ""
-#endif
-const char*    NS_HOST   = SECRET_NS_HOST;
-const char*    NS_TOKEN  = SECRET_NS_TOKEN;        // read-only token is enough
-#if defined(SECRET_DEXCOM_USER) && defined(SECRET_DEXCOM_PASS)
-const char*    DEX_USER  = SECRET_DEXCOM_USER;     // the sensor wearer's account, not a follower
-const char*    DEX_PASS  = SECRET_DEXCOM_PASS;
+#if defined(SECRET_WIFI_NETWORKS)
+const WifiNet DEFAULT_NETS[] = { SECRET_WIFI_NETWORKS };
+#elif defined(SECRET_WIFI_SSID)                   // older secrets.h with a single network
+const WifiNet DEFAULT_NETS[] = { {SECRET_WIFI_SSID, SECRET_WIFI_PASS} };
 #else
-const char*    DEX_USER  = "";
-const char*    DEX_PASS  = "";
+const WifiNet DEFAULT_NETS[] = { {"", ""} };
+#endif
+
+bool usable(const String& s) { return s.length() && !s.startsWith("YOUR_"); }
+
+bool loadConfig() {                                // true if the setup page has saved settings
+  Preferences p;
+  bool saved = p.begin("glucoled", true) && p.getBool("saved", false);
+  if (saved) {
+    for (int i = 0; i < MAX_NETS; i++) {
+      cfg.ssid[i] = p.getString(("s" + String(i)).c_str(), "");
+      cfg.pass[i] = p.getString(("p" + String(i)).c_str(), "");
+    }
+    cfg.nsHost = p.getString("nsHost", ""); cfg.nsToken = p.getString("nsToken", "");
+    cfg.dexUser = p.getString("dexUser", ""); cfg.dexPass = p.getString("dexPass", "");
+    cfg.dexRegion = p.getString("dexRegion", "us"); cfg.tz = p.getString("tz", "JST-9");
+  } else {
+    int n = 0;
+    for (const WifiNet& w : DEFAULT_NETS)
+      if (n < MAX_NETS && usable(w.ssid)) { cfg.ssid[n] = w.ssid; cfg.pass[n] = w.pass; n++; }
+#ifdef SECRET_NS_HOST
+    cfg.nsHost = SECRET_NS_HOST;
+#endif
+#ifdef SECRET_NS_TOKEN
+    cfg.nsToken = SECRET_NS_TOKEN;
+#endif
+#if defined(SECRET_DEXCOM_USER) && defined(SECRET_DEXCOM_PASS)
+    cfg.dexUser = SECRET_DEXCOM_USER; cfg.dexPass = SECRET_DEXCOM_PASS;
 #endif
 #ifdef SECRET_DEXCOM_REGION
-const char*    DEX_REGION = SECRET_DEXCOM_REGION;  // "us", "ous" (outside US) or "jp" (Japan)
-#else
-const char*    DEX_REGION = "us";
+    cfg.dexRegion = SECRET_DEXCOM_REGION;
 #endif
+#ifdef SECRET_TZ
+    cfg.tz = SECRET_TZ;
+#endif
+  }
+  p.end();
+  return saved;
+}
+
+void saveConfig() {
+  Preferences p;
+  p.begin("glucoled", false);
+  for (int i = 0; i < MAX_NETS; i++) {
+    p.putString(("s" + String(i)).c_str(), cfg.ssid[i]);
+    p.putString(("p" + String(i)).c_str(), cfg.pass[i]);
+  }
+  p.putString("nsHost", cfg.nsHost); p.putString("nsToken", cfg.nsToken);
+  p.putString("dexUser", cfg.dexUser); p.putString("dexPass", cfg.dexPass);
+  p.putString("dexRegion", cfg.dexRegion); p.putString("tz", cfg.tz);
+  p.putBool("saved", true);
+  p.end();
+}
+
+void eraseConfig() { Preferences p; p.begin("glucoled", false); p.clear(); p.end(); }
+
+bool haveWifi() { for (int i = 0; i < MAX_NETS; i++) if (usable(cfg.ssid[i])) return true; return false; }
+
 const char*    HOSTNAME  = "Glucoled";         // name shown in your router / Deco app
 const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
 const int      STALE_MIN       = 11;            // minutes old before it's flagged OLD
-#ifdef SECRET_TZ
-const char*    TZ_INFO         = SECRET_TZ;     // POSIX TZ string, e.g. "PST8PDT,M3.2.0,M11.1.0"
-#else
-const char*    TZ_INFO         = "JST-9";       // clock time zone (Japan, no DST)
-#endif
-const char*    FW_VERSION      = "0.4";
+const char*    FW_VERSION      = "0.5";
 #ifndef BOARD_BUTTON
 #define BOARD_BUTTON 0                             // BOOT button on most ESP32 boards
 #endif
-const uint32_t LONG_PRESS_MS   = 2000;          // hold this long to toggle Bluetooth log
+const uint32_t LONG_PRESS_MS   = 2000;          // hold 2 s, release: Bluetooth log on/off
+const uint32_t SETUP_PRESS_MS  = 6000;          // hold 6 s: setup page
 const uint32_t BLE_ON_MS       = 10UL * 60 * 1000;  // Bluetooth log turns itself off after 10 min
 const uint32_t DEBUG_PAGE_MS   = 2UL * 60 * 1000;   // debug page returns to the number after 2 min
 // --------------------------------------------
@@ -188,15 +238,14 @@ void bleStop() {
   if (!debugPage) drawClock();
 }
 
-bool usable(const char* s) { return strlen(s) && strncmp(s, "YOUR_", 5) != 0; }
-bool useDexcom() { return usable(DEX_USER) && usable(DEX_PASS); }
-bool useNs()     { return usable(NS_HOST); }
+bool useDexcom() { return usable(cfg.dexUser) && usable(cfg.dexPass); }
+bool useNs()     { return usable(cfg.nsHost); }
 
 void addNetworks() {
   WiFi.setHostname(HOSTNAME);                      // must be set before WiFi starts
   WiFi.mode(WIFI_STA);
-  for (const WifiNet& n : WIFI_NETWORKS)
-    if (usable(n.ssid)) wifiMulti.addAP(n.ssid, n.pass);
+  for (int i = 0; i < MAX_NETS; i++)
+    if (usable(cfg.ssid[i])) wifiMulti.addAP(cfg.ssid[i].c_str(), cfg.pass[i].c_str());
 }
 
 // Scans, then connects to the strongest known network; on a drop (left home,
@@ -250,7 +299,7 @@ bool fetch() {
     connectWiFi();
     if (WiFi.status() != WL_CONNECTED) { logf("fetch: no wifi"); return false; }
   }
-  if (!useNs() && !useDexcom()) { logf("fetch: no data source in secrets.h"); return false; }
+  if (!useNs() && !useDexcom()) { logf("fetch: no data source set (hold the button 6 s for setup)"); return false; }
 
   Reading ns, dx;
   bool nsOk = false, dxOk = false;
@@ -278,9 +327,9 @@ bool fetch() {
 bool nsFetch() {
   tls.setInsecure();                               // skip cert checks (simple + robust)
   HTTPClient http;
-  String url = String("https://") + NS_HOST + "/api/v1/entries/sgv.json?count=1";
-  if (strlen(NS_TOKEN) && strncmp(NS_TOKEN, "YOUR_", 5) != 0)   // token optional: not needed
-    url += String("&token=") + NS_TOKEN;                         // when the site is readable
+  String url = "https://" + cfg.nsHost + "/api/v1/entries/sgv.json?count=1";
+  if (usable(cfg.nsToken))                         // token optional: not needed when the site is readable
+    url += "&token=" + cfg.nsToken;
   if (!http.begin(tls, url)) { nsErr = "bad url"; return false; }
   http.setConnectTimeout(HTTP_TIMEOUT_MS);
   http.setTimeout(HTTP_TIMEOUT_MS);                // <-- rides out the slow server
@@ -321,12 +370,12 @@ bool     dexLoginLocked  = false;                  // login refused: stop trying
 uint32_t dexLoginRetryAt = 0;
 
 const char* dexHost() {
-  if (!strcmp(DEX_REGION, "jp"))  return "share.dexcom.jp";
-  if (!strcmp(DEX_REGION, "ous")) return "shareous1.dexcom.com";
+  if (cfg.dexRegion == "jp")  return "share.dexcom.jp";
+  if (cfg.dexRegion == "ous") return "shareous1.dexcom.com";
   return "share2.dexcom.com";
 }
 const char* dexAppId() {                           // Japan has its own application ID
-  return !strcmp(DEX_REGION, "jp") ? "d8665ade-9673-4e27-9ff6-92db4ce13d13"
+  return cfg.dexRegion == "jp" ? "d8665ade-9673-4e27-9ff6-92db4ce13d13"
                                    : "d89443d2-327c-4a6f-89e5-496bbb0317db";
 }
 
@@ -372,7 +421,7 @@ bool dexLoginFailed(int code, const String& out) {
   nsCode = code; fetchNoRetry = true;
   if (code == 500 && c.length()) {                 // Dexcom said no: wrong user/password/region, or locked
     dexLoginLocked = true;
-    nsErr = "Dexcom login refused (" + c + "). Check user/password/region, then restart";
+    nsErr = "Dexcom login refused (" + c + "). Check user/password/region on the setup page";
   } else if (code == 200) {                        // all-zero ID: account exists but can't share
     dexLoginLocked = true;
     nsErr = "Dexcom login gave no session: wrong region, or Share is off";
@@ -388,19 +437,19 @@ bool dexLoginFailed(int code, const String& out) {
 }
 
 bool dexLogin() {
-  if (dexLoginLocked) { nsErr = "Dexcom login refused earlier. Fix secrets.h, then restart"; fetchNoRetry = true; return false; }
+  if (dexLoginLocked) { nsErr = "Dexcom login refused earlier. Fix it on the setup page"; fetchNoRetry = true; return false; }
   if ((int32_t)(millis() - dexLoginRetryAt) < 0 && dexLoginRetryAt) { nsErr = "Dexcom login: waiting to retry"; fetchNoRetry = true; return false; }
   String body, out;
   JsonDocument req;
   if (!validId(dexAccountId)) {
-    req["accountName"] = DEX_USER; req["password"] = DEX_PASS; req["applicationId"] = dexAppId();
+    req["accountName"] = cfg.dexUser; req["password"] = cfg.dexPass; req["applicationId"] = dexAppId();
     serializeJson(req, body);
     int code = dexPost("General/AuthenticatePublisherAccount", body, out);
     dexAccountId = code == 200 ? jsonString(out) : "";
     if (!validId(dexAccountId)) { dexAccountId = ""; return dexLoginFailed(code, out); }
   }
   req.clear(); body = "";
-  req["accountId"] = dexAccountId; req["password"] = DEX_PASS; req["applicationId"] = dexAppId();
+  req["accountId"] = dexAccountId; req["password"] = cfg.dexPass; req["applicationId"] = dexAppId();
   serializeJson(req, body);
   int code = dexPost("General/LoginPublisherAccountById", body, out);
   String sid = code == 200 ? jsonString(out) : "";
@@ -545,6 +594,13 @@ void render() {
     drawArrow(dbl ? ax - 12 : ax, ay, lastDir, col);
     if (dbl) drawArrow(ax + 12, ay, lastDir, col);  // two arrows for fast rise/fall
   }
+  if (WiFi.status() != WL_CONNECTED || (!useNs() && !useDexcom())) {   // say how to fix it
+    tft.setTextFont(2); tft.setTextSize(1); tft.setTextDatum(BC_DATUM);
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.drawString(WiFi.status() != WL_CONNECTED ? "No WiFi. Hold the button 6 s for setup"
+                                                 : "No data source. Hold the button 6 s for setup",
+                   tft.width() / 2, tft.height() - 2);
+  }
   drawClock();
 }
 
@@ -610,17 +666,30 @@ void showDebug(bool on) {
   if (on) drawDebug(); else render();
 }
 
-// Short press: debug page on/off. Hold 2 s: Bluetooth log on/off.
-bool btnDown = false, btnLong = false;
+// Short press: debug page on/off. Hold 2 s and release: Bluetooth log on/off.
+// Keep holding to 6 s: setup page (WiFi + data source).
+void enterSetup(const char* why);
+bool btnDown = false, btnHint = false;
 uint32_t btnT0 = 0;
+void drawHoldHint() {                              // shown once the press counts as "long"
+  int h = 20, y = tft.height() - h;
+  tft.fillRect(0, y, tft.width(), h, TFT_BLACK);
+  tft.setTextFont(2); tft.setTextSize(1); tft.setTextDatum(BC_DATUM);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.drawString("Release: Bluetooth.  Keep holding: setup", tft.width() / 2, tft.height() - 2);
+}
 void pollButton() {
   bool down = digitalRead(BOARD_BUTTON) == LOW;
   uint32_t now = millis();
-  if (down && !btnDown) { btnDown = true; btnLong = false; btnT0 = now; }
-  else if (down && !btnLong && now - btnT0 >= LONG_PRESS_MS) { btnLong = true; bleOn ? bleStop() : bleStart(); }
-  else if (!down && btnDown) {
+  if (down && !btnDown) { btnDown = true; btnHint = false; btnT0 = now; }
+  else if (down) {
+    if (!btnHint && now - btnT0 >= LONG_PRESS_MS) { btnHint = true; drawHoldHint(); }
+    if (now - btnT0 >= SETUP_PRESS_MS) enterSetup("button");   // doesn't return
+  } else if (btnDown) {
     btnDown = false;
-    if (!btnLong && now - btnT0 >= 30) showDebug(!debugPage);   // 30 ms debounce
+    uint32_t held = now - btnT0;
+    if (held >= LONG_PRESS_MS) { bleOn ? bleStop() : bleStart(); showDebug(debugPage); }
+    else if (held >= 30) showDebug(!debugPage);    // 30 ms debounce
   }
 }
 
@@ -650,12 +719,14 @@ void setup() {
   tft.setTextDatum(TL_DATUM);
   tft.drawString("Connecting WiFi...", 10, 10);
   logf("boot: Glucoled %s on %s, reset: %s", FW_VERSION, ARDUINO_BOARD, resetReason());
-  if (useNs() && useDexcom()) logf("source: Nightscout, Dexcom (%s) as backup", DEX_REGION);
-  else if (useDexcom())       logf("source: Dexcom Share, region %s", DEX_REGION);
+  logf("settings: %s", loadConfig() ? "from setup page" : "defaults (nothing saved yet)");
+  if (!haveWifi() || (!useNs() && !useDexcom())) enterSetup("not set up yet");   // first boot
+  if (useNs() && useDexcom()) logf("source: Nightscout, Dexcom (%s) as backup", cfg.dexRegion.c_str());
+  else if (useDexcom())       logf("source: Dexcom Share, region %s", cfg.dexRegion.c_str());
   else                        logf("source: Nightscout");
   addNetworks();
   connectWiFi();
-  configTzTime(TZ_INFO, "pool.ntp.org", "time.google.com");  // age uses the UTC epoch; TZ only affects the clock
+  configTzTime(cfg.tz.c_str(), "pool.ntp.org", "time.google.com");  // age uses the UTC epoch; TZ only affects the clock
   if (useDexcom())                                 // Dexcom's certificate check needs the date
     for (uint32_t t0 = millis(); time(nullptr) < 1000000000L && millis() - t0 < 10000; ) delay(100);
   fetch();
@@ -679,7 +750,7 @@ void loop() {
   if (now >= 1000000000L && !timeLogged) {
     timeLogged = true;
     char b[32]; struct tm t; localtime_r(&now, &t); strftime(b, sizeof b, "%Y-%m-%d %H:%M:%S", &t);
-    logf("time: synced, %s (%s)", b, TZ_INFO);
+    logf("time: synced, %s (%s)", b, cfg.tz.c_str());
   }
   wl_status_t ws = WiFi.status();                  // log drops/reconnects between fetches
   if (ws != lastWifi) {

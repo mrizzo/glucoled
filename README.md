@@ -58,59 +58,7 @@ On Apple Silicon Macs, the Arduino toolchain still needs Rosetta for one helper 
 You do **not** need to edit the TFT_eSPI library's `User_Setup.h`. Each board's pins live
 in `board_*.h` here, and `build.sh` passes the right one in.
 
-### 2. Your settings
-
-```sh
-cp secrets.example.h secrets.h
-```
-
-Edit `secrets.h`. It is gitignored, so it never gets committed.
-
-```c
-#define SECRET_WIFI_NETWORKS \
-  {"HomeWiFi",       "home-password"}, \
-  {"My iPhone",      "hotspot-password"}
-#define SECRET_NS_HOST   "yoursite.example.com"   // no https://, no trailing slash
-#define SECRET_NS_TOKEN  ""                        // see below
-```
-
-And/or read Dexcom directly:
-
-```c
-#define SECRET_DEXCOM_USER   "you@example.com"
-#define SECRET_DEXCOM_PASS   "your-dexcom-password"
-#define SECRET_DEXCOM_REGION "jp"     // "us", "ous" (outside the US) or "jp" (Japan)
-```
-
-- **WiFi:** list one `{"name", "password"}` per line, ending every line except the last with
-  `, \`. The board joins whichever listed network is strongest and switches if it drops.
-  Emoji names work, but they must match byte for byte. Typing them as escapes avoids editor
-  trouble, e.g. `"\U0001F422"` for 🐢.
-- **iPhone hotspot:** the ESP32 only does 2.4 GHz WiFi. Turn on
-  *Settings → Personal Hotspot → Maximize Compatibility*, or the board won't see it.
-- **Time zone:** the clock defaults to Japan (`JST-9`). Elsewhere, add a POSIX TZ string, e.g.
-  `#define SECRET_TZ "PST8PDT,M3.2.0,M11.1.0"` (US Pacific) or `"GMT0BST,M3.5.0/1,M10.5.0"` (UK).
-- **Token:** leave it empty if your Nightscout site can be read without logging in (the
-  default `AUTH_DEFAULT_ROLES=readable`). Otherwise create a token with the `readable` role
-  under *Admin Tools → Subjects* and paste it here. Never use your API_SECRET.
-- **Sources:** set Nightscout, Dexcom, or both. With both, Nightscout is asked first (it's
-  usually fastest when an uploader like Trio/Loop/xDrip is running). If its reading is missing
-  or 6+ minutes old (the uploader missed one), Dexcom is asked too and the newer reading is
-  shown. A small **NS** or **D** in the top-right corner shows where the number came from.
-- **Dexcom:**
-  - Use the **sensor wearer's** Dexcom login, the one the Dexcom app is signed into, not a
-    follower's. **Share must be on** in the Dexcom app.
-  - Pick the region the account lives in. Japanese accounts only work with `"jp"` (many other
-    displays only know the US and international servers, so they reject Japanese logins).
-  - If the password contains `"` or `\`, put a backslash before it, e.g. `"pa\"ss"`.
-  - Your Dexcom **password is stored on the board**. Anyone with the board and a USB cable could
-    read it out, so treat the board like a key.
-  - This uses Dexcom's unofficial Share API (the one the Follow app uses, as in
-    [pydexcom](https://github.com/gagebenne/pydexcom)). Dexcom could change it at any time.
-  - If Dexcom rejects the login, Glucoled stops trying until you restart it, so a wrong password
-    can't lock your account.
-
-### 3. Build and flash
+### 2. Build and flash
 
 Plug in **one** board, then:
 
@@ -122,16 +70,77 @@ BOARD=tdisplays3 ./build.sh upload   # LilyGO T-Display S3
 `./build.sh` without `upload` only compiles. The port is auto-detected; override it with
 `PORT=/dev/cu.xxx`.
 
-After flashing, the screen shows "Connecting WiFi...", then your number within about 20 seconds.
-It refreshes every 60 seconds.
+### 3. Set it up from your phone
+
+On first start the screen shows **Glucoled setup** with a QR code.
+
+<p align="center">
+  <img src="docs/setup-screen.jpg" alt="Glucoled setup screen on a T-Display S3: a QR code, the Glucoled-Setup network name, a one-time password and the steps" width="58%">
+  <img src="docs/setup-form.jpg" alt="The setup page on an iPhone: WiFi names and passwords, Dexcom username, password and region set to Japan" width="30%">
+</p>
+
+1. Scan the QR code with your phone's camera and tap to join the **Glucoled-Setup** WiFi
+   (or join it by hand with the password shown on the screen).
+2. The setup page opens by itself. If it doesn't, open `http://192.168.4.1`.
+3. Fill in:
+   - **WiFi:** up to four networks, e.g. home and your phone's hotspot. Glucoled joins whichever
+     is in range.
+   - **Dexcom:** the sensor wearer's login and the account's region, and/or
+   - **Nightscout:** your site's address (and a read token if it needs one).
+   - **Time zone** for the clock.
+4. Tap **Save and restart**. Your number appears within about 20 seconds and refreshes every
+   60 seconds.
+
+If the board can't join WiFi (or has no data source), it says so at the bottom of the screen:
+
+<p align="center">
+  <img src="docs/nowifi.jpg" alt="Glucoled showing -- with the hint: No WiFi. Hold the button 6 s for setup" width="50%">
+</p>
+
+To change settings later, **hold the button for 6 seconds** (the screen says "Keep holding: setup"
+after 2). Press it again on the setup screen to cancel. The page also has **Erase all settings**,
+e.g. before giving the board to someone else.
+
+Settings are stored on the board only. The setup network and page exist only while the setup
+screen is showing; normally no web server runs.
+
+Notes:
+
+- **WiFi:** the ESP32 only does 2.4 GHz. For an **iPhone hotspot**, turn on
+  *Settings → Personal Hotspot → Maximize Compatibility*, or the board won't see it.
+- **Nightscout token:** leave it empty if your site can be read without logging in (the
+  default `AUTH_DEFAULT_ROLES=readable`). Otherwise create a token with the `readable` role
+  under *Admin Tools → Subjects*. Never use your API_SECRET.
+- **Sources:** set Nightscout, Dexcom, or both. With both, Nightscout is asked first (it's
+  usually fastest when an uploader like Trio/Loop/xDrip is running). If its reading is missing
+  or 6+ minutes old (the uploader missed one), Dexcom is asked too and the newer reading is
+  shown. A small **NS** or **D** in the top-right corner shows where the number came from.
+- **Dexcom:**
+  - Use the **sensor wearer's** Dexcom login, the one the Dexcom app is signed into, not a
+    follower's. **Share must be on** in the Dexcom app.
+  - Pick the region the account lives in. Japanese accounts only work with **Japan** (many other
+    displays only know the US and international servers, so they reject Japanese logins).
+  - Your Dexcom **password is stored on the board**. Anyone with the board and a USB cable could
+    read it out, so treat the board like a key (or use *Erase all settings* before passing it on).
+  - This uses Dexcom's unofficial Share API (the one the Follow app uses, as in
+    [pydexcom](https://github.com/gagebenne/pydexcom)). Dexcom could change it at any time.
+  - If Dexcom rejects the login, Glucoled stops trying until you fix it on the setup page, so a
+    wrong password can't lock your account.
+
+#### Optional: built-in defaults (developers)
+
+If you flash several boards for yourself, you can compile settings in instead of using the
+setup page: `cp secrets.example.h secrets.h` (gitignored) and fill it in. They're used until
+something is saved on the setup page.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
 | `board not found` | Use a data cable, or try another port/hub. |
-| Stuck on "Connecting WiFi..." | Check the WiFi name/password (exact spelling), and that it's 2.4 GHz. |
-| `--` instead of a number | WiFi works, but the data source didn't answer. Open the debug page (below) for the reason. Nightscout: check `SECRET_NS_HOST` and the token. Dexcom: check the login, region and that Share is on. |
+| "No WiFi. Hold the button 6 s for setup" | Check the WiFi name/password on the setup page (exact spelling), and that it's 2.4 GHz. |
+| The setup page doesn't pop up | Open `http://192.168.4.1` in the phone's browser while joined to Glucoled-Setup. Turn off mobile data if the phone keeps leaving the network. |
+| `--` instead of a number | WiFi works, but the data source didn't answer. Open the debug page (below) for the reason. Nightscout: check the address and token. Dexcom: check the login, region and that Share is on. |
 | Number is always grey | No new reading for 11+ minutes. Check Nightscout itself, or that the Dexcom app is running and sharing. |
 | Colours inverted (ideaspark) | In `board_ideaspark_19.h`, swap `TFT_INVERSION_ON` for `TFT_INVERSION_OFF`. |
 
@@ -145,12 +154,12 @@ Three ways to see what it's doing. None of them open a network port.
 - **Debug page:** a **short press** of the BOOT button (GPIO0; on the T-Display S3, the lower orange button with the screen landscape and USB on the right) switches to a status screen: WiFi network, signal and
   IP, the last Nightscout result and timing, fetch counts, uptime and free memory. Press again,
   or wait 2 minutes, to go back.
-- **Bluetooth log:** **hold** the BOOT button for 2 seconds. A blue `BT` appears top-left, and for
+- **Bluetooth log:** **hold** the BOOT button for 2 seconds, then release. A blue `BT` appears top-left, and for
   10 minutes the board advertises as "Glucoled". In *Bluefruit Connect* (iOS/Android), tap
   Glucoled, then **UART**. On Android, *Serial Bluetooth Terminal* also works. You get the last 40
   log lines and then live ones. (Generic BLE apps like *nRF Connect* show only raw packets, and
   their "parsers" decode the text as nonsense heart-rate or glucose values.) It's read-only and stays on while a phone is connected.
-  Hold the button again to turn it off.
+  Hold for 2 seconds and release again to turn it off.
 
 The log never includes your token, Nightscout address or WiFi passwords. It does include
 WiFi network names.

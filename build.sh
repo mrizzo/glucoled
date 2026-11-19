@@ -2,12 +2,12 @@
 # Compile (and optionally flash) the sketch.
 #   ./build.sh            compile only
 #   ./build.sh upload     compile + flash to the first USB serial port found
+# Settings are entered on the board's setup page; secrets.h (optional) only sets defaults.
 # Pick the board with BOARD= (default ideaspark):
 #   BOARD=ideaspark   ideaspark ESP32 1.9" ST7789 (CH340 USB)
 #   BOARD=tdisplays3  LilyGO T-Display S3 (ESP32-S3 native USB)
 set -euo pipefail
 cd "$(dirname "$0")"
-[ -f secrets.h ] || { echo "create secrets.h from secrets.example.h first"; exit 1; }
 BOARD="${BOARD:-ideaspark}"
 case "$BOARD" in
   ideaspark)  HDR=board_ideaspark_19.h; FQBN="esp32:esp32:esp32:FlashSize=16M,PartitionScheme=app3M_fat9M_16MB" ;;
