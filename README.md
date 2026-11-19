@@ -1,5 +1,7 @@
 # Glucoled
 
+English | [日本語](README.ja.md)
+
 A tiny desk/car display for your glucose, from [Nightscout](https://nightscout.github.io/) or
 straight from **Dexcom Share** (including Japanese Dexcom accounts):
 **just the number and the trend arrow**. No alarms, no graphs, no app.
@@ -26,7 +28,7 @@ straight from **Dexcom Share** (including Japanese Dexcom accounts):
 **No tools needed:** open **[glucoled.com](https://glucoled.com)** in Chrome or Edge,
 plug in the board and click **Install**, then set it up from your phone. The page walks through every click,
 in English and Japanese.
-（日本語の手順もあります。）
+（日本語の説明は [README.ja.md](README.ja.md)。）
 
 The rest of this README is for building it yourself.
 
