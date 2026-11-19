@@ -111,7 +111,7 @@ const char*    HOSTNAME  = "Glucoled";         // name shown in your router / De
 const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
 const int      STALE_MIN       = 11;            // minutes old before it's flagged OLD
-const char*    FW_VERSION      = "0.5";
+const char*    FW_VERSION      = "0.5.1";
 #ifndef BOARD_BUTTON
 #define BOARD_BUTTON 0                             // BOOT button on most ESP32 boards
 #endif

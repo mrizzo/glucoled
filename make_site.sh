@@ -34,8 +34,7 @@ for pair in "esp32 ideaspark" "esp32s3 tdisplays3"; do
   fi
 done
 cp "$BOOT_APP0" "$OUT/fw/boot_app0.bin"
-cp web/index.html "$OUT/"
-cp docs/setup-screen.jpg docs/tdisplay-s3.jpg "$OUT/"
+cp -R web/. "$OUT/"
 
 parts() {   # bootloader offset differs: 0x1000 on ESP32, 0x0 on ESP32-S3
   echo "[{\"path\":\"fw/$1/bootloader.bin\",\"offset\":$2},{\"path\":\"fw/$1/partitions.bin\",\"offset\":32768},"\

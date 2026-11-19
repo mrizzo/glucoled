@@ -21,6 +21,15 @@ straight from **Dexcom Share** (including Japanese Dexcom accounts):
 - Remembers **several WiFi networks**, e.g. home + your phone's hotspot for the car.
 - Total cost is the board: about ¥2,000 / US$15.
 
+## Install
+
+**No tools needed:** open **[mrizzo.github.io/glucoled](https://mrizzo.github.io/glucoled/)** in Chrome or Edge,
+plug in the board and click **Install**, then set it up from your phone. The page walks through every click,
+in English and Japanese.
+（日本語の手順もあります。）
+
+The rest of this README is for building it yourself.
+
 > **Not a medical device.** Glucoled is a convenience display. Don't make treatment
 > decisions from it. Use your CGM app / receiver and its alarms.
 

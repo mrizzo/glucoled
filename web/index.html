@@ -10,20 +10,27 @@
   body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 -apple-system, system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; }
   main { max-width:760px; margin:0 auto; padding:28px 18px 60px; }
   h1 { font-size:30px; margin:0; } h1 span { color:var(--green); }
-  h2 { font-size:19px; margin:34px 0 8px; }
+  h2 { font-size:21px; margin:40px 0 8px; border-top:1px solid var(--line); padding-top:24px; }
   .lead { color:var(--dim); margin:4px 0 20px; }
   .ja { color:var(--dim); font-size:14px; display:block; }
   .hero { width:100%; border-radius:12px; display:block; margin:18px 0 6px; }
-  ol { padding-left:22px; } li { margin:8px 0; }
+  ul { padding-left:22px; } li { margin:8px 0; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin:14px 0; }
   .install { text-align:center; padding:26px 18px; }
-  esp-web-install-button button[slot=activate] { font:600 18px system-ui, sans-serif; padding:14px 34px; border:0; border-radius:10px; background:var(--green); color:#062; cursor:pointer; }
+  esp-web-install-button button[slot=activate] { font:600 19px system-ui, sans-serif; padding:15px 38px; border:0; border-radius:10px; background:var(--green); color:#062; cursor:pointer; }
   .warn { color:var(--yellow); }
   code { background:#222; padding:1px 5px; border-radius:4px; }
   a { color:#8cc8ff; }
-  .shot { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-  .shot img { max-width:100%; width:330px; border-radius:10px; }
   .small { font-size:14px; color:var(--dim); }
+  /* numbered steps with a picture each */
+  .steps { counter-reset:step; list-style:none; padding:0; margin:18px 0; }
+  .steps > li { counter-increment:step; display:grid; grid-template-columns:44px 1fr; gap:4px 12px; margin:0 0 26px; }
+  .steps > li::before { content:counter(step); grid-row:span 2; width:34px; height:34px; border-radius:50%; background:var(--green);
+                        color:#062; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .steps > li > img { grid-column:2; max-width:100%; border-radius:10px; border:1px solid var(--line); margin-top:8px; }
+  .steps > li > img.phone { max-width:260px; }
+  .tip { background:#2a2614; border:1px solid #4a4220; border-radius:10px; padding:12px 14px; margin:12px 0; font-size:15px; }
+  .tip b { color:var(--yellow); }
 </style>
 </head>
 <body>
@@ -32,7 +39,7 @@
   <p class="lead">A tiny glucose display: just the number and the trend arrow, from Dexcom Share (including
     Japanese accounts) or Nightscout.
     <span class="ja">Dexcom Share（日本のアカウント対応）またはNightscoutから、血糖値と矢印だけを表示する小さなディスプレイ。</span></p>
-  <img class="hero" src="tdisplay-s3.jpg" alt="Glucoled on a LilyGO T-Display S3 showing a green 96 with a flat arrow">
+  <img class="hero" src="img/tdisplay-s3.jpg" alt="Glucoled on a LilyGO T-Display S3 showing a green 96 with a flat arrow">
 
   <h2>1. You need <span class="ja">準備するもの</span></h2>
   <ul>
@@ -41,11 +48,14 @@
     <li>A <b>USB-C data cable</b> (charge-only cables won't work). <span class="ja">データ通信できるUSB-Cケーブル</span></li>
     <li>A computer with <b>Chrome or Edge</b> (Mac, Windows, Linux). Safari and phones can't install.
       <span class="ja">ChromeかEdgeが使えるパソコン（Safari・スマホは不可）</span></li>
+    <li>Your <b>Dexcom login</b>: the email and password of the person wearing the sensor, with <b>Share</b> on in the Dexcom app.
+      <span class="ja">センサー装着者本人のDexcomのメールとパスワード（Dexcomアプリで「共有」をオン）</span></li>
   </ul>
   <p class="small">Also works on the ideaspark ESP32 1.9" board.
     <a href="https://github.com/mrizzo/glucoled">Source code and details</a>.</p>
 
-  <h2>2. Install <span class="ja">インストール</span></h2>
+  <h2>2. Install (on the computer) <span class="ja">インストール（パソコンで）</span></h2>
+  <p>Plug the board into the computer with the USB cable, then click: <span class="ja">ボードをUSBでパソコンにつないで、下のボタンを押す：</span></p>
   <div class="card install">
     <esp-web-install-button manifest="manifest.json">
       <button slot="activate">Install Glucoled</button>
@@ -53,30 +63,62 @@
         <b>Chrome</b> or <b>Edge</b> on a computer.<br>このブラウザは使えません。パソコンのChromeかEdgeで開いてください。</span>
       <span slot="not-allowed" class="warn">Installing needs a secure page (https).</span>
     </esp-web-install-button>
-    <p class="small" style="margin-top:14px">Plug the board in and click <b>Install Glucoled</b>. In the list,
-      <b>click the board's line</b> (<code>USB JTAG/serial debug unit</code>, <code>usbmodem…</code> or
-      <code>usbserial…</code>; not "Bluetooth" or "debug-console"), then <b>Connect</b>, then <b>Install</b>.
-      Takes about a minute.<br>
-      ボードを接続して「Install Glucoled」。一覧でボードの行（USB JTAG/serial debug unit など）をクリックして
-      「接続」、次に「Install」。約1分です。</p>
   </div>
-  <p class="small">Board not in the list? Hold the <b>BOOT</b> button (the lower one) while plugging it in, then try
-    again. Afterwards, press the reset button on the side.<br>
-    一覧に出ない場合：下のBOOTボタンを押しながらUSBを差し込み、もう一度。終わったら側面のリセットボタンを押してください。</p>
 
-  <h2>3. Set it up from your phone <span class="ja">スマホで設定</span></h2>
-  <div class="shot">
-    <img src="setup-screen.jpg" alt="Glucoled setup screen with a QR code">
-    <ol>
-      <li>The screen shows a QR code. Scan it with your phone camera and join <b>Glucoled-Setup</b>.
-        <span class="ja">画面のQRコードをカメラで読み取り、Glucoled-Setupに接続。</span></li>
-      <li>A setup page opens. Enter your WiFi, your Dexcom login (the sensor wearer's) and region, and tap
-        <b>Save</b>. <span class="ja">設定画面が開きます。WiFiとDexcom（装着者本人）のログイン、地域を入力して保存。</span></li>
-      <li>Your number appears within about 20 seconds. <span class="ja">約20秒で血糖値が表示されます。</span></li>
-    </ol>
-  </div>
-  <p class="small">To change settings later, hold the BOOT button for 6 seconds.
-    設定を変えるときはBOOTボタンを6秒長押し。</p>
+  <ol class="steps">
+    <li><div><b>Pick the board and click Connect.</b> Click the line that says <code>USB JTAG/serial debug unit</code>
+      (or <code>usbmodem…</code> / <code>usbserial…</code>), then <b>Connect</b>. Not "Bluetooth" or "debug-console".
+      <span class="ja">「USB JTAG/serial debug unit」の行をクリックして「接続」。BluetoothやDebug-consoleではありません。</span></div>
+      <img src="img/2-port.jpg" alt="Chrome's serial port list with USB JTAG/serial debug unit selected and the Connect button"></li>
+    <li><div><b>If you see a menu, click Install Glucoled.</b> (It appears when the board already has software on it.)
+      <span class="ja">メニューが出たら「Install Glucoled」をクリック。</span></div>
+      <img src="img/2b-menu.jpg" alt="Menu with Install Glucoled and Logs & Console" style="max-width:300px"></li>
+    <li><div><b>Leave "Erase device" ticked and click Next.</b>
+      <span class="ja">「Erase device」にチェックのまま「Next」。</span></div>
+      <img src="img/3-erase.jpg" alt="Erase device dialog with the box ticked and the Next button"></li>
+    <li><div><b>Click Install.</b> <span class="ja">「Install」をクリック。</span></div>
+      <img src="img/4-confirm.jpg" alt="Confirm Installation dialog with the Install button"></li>
+    <li><div><b>Wait about 2 minutes.</b> Keep this page in front and don't unplug the board.
+      <span class="ja">約2分待ちます。このページを表示したまま、ケーブルを抜かないでください。</span></div>
+      <img src="img/5-progress.jpg" alt="Installing, 41%" style="max-width:260px"></li>
+    <li><div><b>Done!</b> Click Next and close the window. The board restarts and shows a QR code.
+      <span class="ja">完了！「Next」を押して閉じます。ボードが再起動してQRコードが表示されます。</span></div>
+      <img src="img/6-done.jpg" alt="Installation complete" style="max-width:240px"></li>
+  </ol>
+
+  <div class="tip"><b>Error "Failed to open serial port"?</b> Another tab or program is using the board. Close other
+    tabs with this page (or Arduino), unplug the board, plug it back in and try again.<br>
+    <span class="ja">「Failed to open serial port」：他のタブやアプリがボードを使っています。閉じてからUSBを抜き差しして再試行。</span></div>
+  <div class="tip"><b>Board not in the list?</b> Try another USB cable (many are charge-only). Still nothing: hold the
+    <b>BOOT</b> button (the lower one) while plugging it in, try again, and press the reset button on the side afterwards.<br>
+    <span class="ja">一覧に出ない：別のケーブルを試す。だめなら下のBOOTボタンを押しながらUSBを差し込み、再試行。終わったら側面のリセットボタン。</span></div>
+
+  <h2>3. Set it up (on your phone) <span class="ja">設定（スマホで）</span></h2>
+  <p>The board can now be unplugged from the computer and powered from any USB charger.
+    <span class="ja">パソコンから外して、USB充電器につないでもOKです。</span></p>
+  <ol class="steps">
+    <li><div><b>Scan the QR code on the board</b> with the phone camera and tap <b>Join "Glucoled-Setup"</b>.
+      <span class="ja">ボードのQRコードをカメラで読み取り、「Glucoled-Setup」に接続。</span></div>
+      <img src="img/setup-screen.jpg" alt="Glucoled setup screen with a QR code, network name and password"></li>
+    <li><div><b>A setup page opens.</b> Type your <b>WiFi name and password</b> (home, and your phone's hotspot if you
+      want it in the car). If the page doesn't open, open <code>192.168.4.1</code> in the browser.
+      <span class="ja">設定画面が開きます。WiFi名とパスワードを入力（自宅、車で使うならスマホのテザリングも）。開かない場合はブラウザで192.168.4.1。</span></div>
+      <img class="phone" src="img/7-form-wifi.jpg" alt="Setup page: four WiFi name and password rows"></li>
+    <li><div><b>Enter the Dexcom email and password, choose the region</b> (<b>Japan</b> for Japanese accounts),
+      then tap <b>Save and restart</b>. Leave Nightscout empty if you don't use it.
+      <span class="ja">Dexcomのメールとパスワードを入力、地域は「Japan / 日本」を選んで「保存して再起動」。Nightscoutは空欄でOK。</span></div>
+      <img class="phone" src="img/8-form-save.jpg" alt="Setup page: region Japan, Nightscout empty, time zone Japan, Save and restart button"></li>
+    <li><div><b>Your number appears within about 20 seconds.</b> Reconnect your phone to your normal WiFi.
+      <span class="ja">約20秒で血糖値が表示されます。スマホのWiFiを元に戻してください。</span></div></li>
+  </ol>
+
+  <div class="tip"><b>"No WiFi. Hold the button 6 s for setup"?</b> The WiFi name or password is wrong, or it's a
+    5 GHz network. Hold the lower button for 6 seconds to open setup again. iPhone hotspot: turn on
+    <i>Maximize Compatibility</i>.<br>
+    <span class="ja">WiFi名・パスワードの間違いか5GHzです。下のボタンを6秒長押しで設定し直し。iPhoneのテザリングは「互換性を優先」をオン。</span></div>
+  <div class="tip"><b>Shows "--"?</b> WiFi works but Dexcom didn't answer: check the email, password and region, and that
+    Share is on in the Dexcom app. Hold the button 6 seconds to fix it.<br>
+    <span class="ja">「--」表示：Dexcomのメール・パスワード・地域、アプリの共有設定を確認。ボタン6秒長押しで修正。</span></div>
 
   <h2>Good to know <span class="ja">注意</span></h2>
   <ul class="small">
@@ -84,8 +126,7 @@
       医療機器ではありません。治療の判断にはCGMアプリを使ってください。</li>
     <li>Your Dexcom password is stored on the board only. It uses Dexcom's unofficial Share API, which could change.
       パスワードはボード内にのみ保存されます。</li>
-    <li>WiFi must be 2.4 GHz. For an iPhone hotspot, turn on <i>Maximize Compatibility</i>.
-      WiFiは2.4GHzのみ。iPhoneのテザリングは「互換性を優先」をオンに。</li>
+    <li>To change settings later, hold the lower button for 6 seconds. 設定変更：下のボタンを6秒長押し。</li>
   </ul>
 </main>
 </body>

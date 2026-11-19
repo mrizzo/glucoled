@@ -118,10 +118,13 @@ void sendForm(const String& error) {
        esc(cfg.dexUser) + "\">";
   h += "<label>Dexcom password</label><input name=dp type=password placeholder=\"" +
        String(cfg.dexPass.length() ? "(unchanged)" : "") + "\">";
+  // No default region: a wrong one looks like a wrong password, so make people pick.
+  bool regionSet = cfg.dexUser.length() > 0;
   h += "<label>Account region / 地域</label><select name=dr>";
+  h += String("<option value=\"\"") + (regionSet ? "" : " selected") + ">-- choose / 選択 --</option>";
   const char* regs[][2] = {{"jp", "Japan / 日本"}, {"us", "United States"}, {"ous", "Outside the US (Europe etc.)"}};
   for (auto& r : regs)
-    h += String("<option value=") + r[0] + (cfg.dexRegion == r[0] ? " selected" : "") + ">" + r[1] + "</option>";
+    h += String("<option value=") + r[0] + (regionSet && cfg.dexRegion == r[0] ? " selected" : "") + ">" + r[1] + "</option>";
   h += "</select>";
 
   h += "<h2>Nightscout (optional)</h2><p class=s>If you also run Nightscout, it's asked first and "
@@ -183,6 +186,8 @@ void handleSave() {
   if (n == 0) { cfg = c; return sendForm("Add at least one WiFi network."); }
   bool dex = c.dexUser.length() && c.dexPass.length(), ns = c.nsHost.length();
   if (c.dexUser.length() && !c.dexPass.length()) { cfg = c; return sendForm("Enter the Dexcom password."); }
+  if (c.dexUser.length() && !c.dexRegion.length()) { cfg = c; return sendForm("Choose the Dexcom account region (Japan for Japanese accounts). / Dexcomの地域を選んでください。"); }
+  if (!c.dexRegion.length()) c.dexRegion = "us";
   if (!dex && !ns) { cfg = c; return sendForm("Fill in Dexcom or Nightscout (or both)."); }
 
   cfg = c;
