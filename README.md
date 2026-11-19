@@ -23,7 +23,7 @@ straight from **Dexcom Share** (including Japanese Dexcom accounts):
 
 ## Install
 
-**No tools needed:** open **[mrizzo.github.io/glucoled](https://mrizzo.github.io/glucoled/)** in Chrome or Edge,
+**No tools needed:** open **[glucoled.com](https://glucoled.com)** in Chrome or Edge,
 plug in the board and click **Install**, then set it up from your phone. The page walks through every click,
 in English and Japanese.
 （日本語の手順もあります。）
