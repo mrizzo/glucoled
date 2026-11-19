@@ -26,7 +26,8 @@
 #include <BLE2902.h>
 #include <Preferences.h>
 #include <qrcode.h>                                // ESP-IDF QR encoder, part of the ESP32 core
-#if __has_include("secrets.h")                     // optional: compiled-in defaults for developers.
+#if __has_include("secrets.h") && !defined(GLUCOLED_NO_SECRETS)   // optional developer defaults;
+                                                   // never in public builds (build.sh NOSECRETS=1)
 #include "secrets.h"                               // Normally everything is set on the setup page.
 #endif
 #include "dexcom_roots.h"

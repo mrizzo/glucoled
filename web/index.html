@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glucoled installer</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+  :root { --bg:#111; --fg:#eee; --dim:#9a9a9a; --card:#1c1c1c; --line:#333; --green:#67cc63; --yellow:#f7d84a; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 -apple-system, system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:28px 18px 60px; }
+  h1 { font-size:30px; margin:0; } h1 span { color:var(--green); }
+  h2 { font-size:19px; margin:34px 0 8px; }
+  .lead { color:var(--dim); margin:4px 0 20px; }
+  .ja { color:var(--dim); font-size:14px; display:block; }
+  .hero { width:100%; border-radius:12px; display:block; margin:18px 0 6px; }
+  ol { padding-left:22px; } li { margin:8px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin:14px 0; }
+  .install { text-align:center; padding:26px 18px; }
+  esp-web-install-button button[slot=activate] { font:600 18px system-ui, sans-serif; padding:14px 34px; border:0; border-radius:10px; background:var(--green); color:#062; cursor:pointer; }
+  .warn { color:var(--yellow); }
+  code { background:#222; padding:1px 5px; border-radius:4px; }
+  a { color:#8cc8ff; }
+  .shot { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .shot img { max-width:100%; width:330px; border-radius:10px; }
+  .small { font-size:14px; color:var(--dim); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Gluco<span>led</span> installer</h1>
+  <p class="lead">A tiny glucose display: just the number and the trend arrow, from Dexcom Share (including
+    Japanese accounts) or Nightscout.
+    <span class="ja">Dexcom Share（日本のアカウント対応）またはNightscoutから、血糖値と矢印だけを表示する小さなディスプレイ。</span></p>
+  <img class="hero" src="tdisplay-s3.jpg" alt="Glucoled on a LilyGO T-Display S3 showing a green 96 with a flat arrow">
+
+  <h2>1. You need <span class="ja">準備するもの</span></h2>
+  <ul>
+    <li><b>A LilyGO T-Display S3</b> (the plain 1.9" version, not AMOLED/Pro/Long). The one with the plastic shell is nicest.
+      <span class="ja">LilyGO T-Display S3（1.9インチの通常版。ケース付きがおすすめ）</span></li>
+    <li>A <b>USB-C data cable</b> (charge-only cables won't work). <span class="ja">データ通信できるUSB-Cケーブル</span></li>
+    <li>A computer with <b>Chrome or Edge</b> (Mac, Windows, Linux). Safari and phones can't install.
+      <span class="ja">ChromeかEdgeが使えるパソコン（Safari・スマホは不可）</span></li>
+  </ul>
+  <p class="small">Also works on the ideaspark ESP32 1.9" board.
+    <a href="https://github.com/mrizzo/glucoled">Source code and details</a>.</p>
+
+  <h2>2. Install <span class="ja">インストール</span></h2>
+  <div class="card install">
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Install Glucoled</button>
+      <span slot="unsupported" class="warn">This browser can't install firmware. Please open this page in
+        <b>Chrome</b> or <b>Edge</b> on a computer.<br>このブラウザは使えません。パソコンのChromeかEdgeで開いてください。</span>
+      <span slot="not-allowed" class="warn">Installing needs a secure page (https).</span>
+    </esp-web-install-button>
+    <p class="small" style="margin-top:14px">Plug the board in and click <b>Install Glucoled</b>. In the list,
+      <b>click the board's line</b> (<code>USB JTAG/serial debug unit</code>, <code>usbmodem…</code> or
+      <code>usbserial…</code>; not "Bluetooth" or "debug-console"), then <b>Connect</b>, then <b>Install</b>.
+      Takes about a minute.<br>
+      ボードを接続して「Install Glucoled」。一覧でボードの行（USB JTAG/serial debug unit など）をクリックして
+      「接続」、次に「Install」。約1分です。</p>
+  </div>
+  <p class="small">Board not in the list? Hold the <b>BOOT</b> button (the lower one) while plugging it in, then try
+    again. Afterwards, press the reset button on the side.<br>
+    一覧に出ない場合：下のBOOTボタンを押しながらUSBを差し込み、もう一度。終わったら側面のリセットボタンを押してください。</p>
+
+  <h2>3. Set it up from your phone <span class="ja">スマホで設定</span></h2>
+  <div class="shot">
+    <img src="setup-screen.jpg" alt="Glucoled setup screen with a QR code">
+    <ol>
+      <li>The screen shows a QR code. Scan it with your phone camera and join <b>Glucoled-Setup</b>.
+        <span class="ja">画面のQRコードをカメラで読み取り、Glucoled-Setupに接続。</span></li>
+      <li>A setup page opens. Enter your WiFi, your Dexcom login (the sensor wearer's) and region, and tap
+        <b>Save</b>. <span class="ja">設定画面が開きます。WiFiとDexcom（装着者本人）のログイン、地域を入力して保存。</span></li>
+      <li>Your number appears within about 20 seconds. <span class="ja">約20秒で血糖値が表示されます。</span></li>
+    </ol>
+  </div>
+  <p class="small">To change settings later, hold the BOOT button for 6 seconds.
+    設定を変えるときはBOOTボタンを6秒長押し。</p>
+
+  <h2>Good to know <span class="ja">注意</span></h2>
+  <ul class="small">
+    <li><b>Not a medical device.</b> Don't make treatment decisions from it; use your CGM app and its alarms.
+      医療機器ではありません。治療の判断にはCGMアプリを使ってください。</li>
+    <li>Your Dexcom password is stored on the board only. It uses Dexcom's unofficial Share API, which could change.
+      パスワードはボード内にのみ保存されます。</li>
+    <li>WiFi must be 2.4 GHz. For an iPhone hotspot, turn on <i>Maximize Compatibility</i>.
+      WiFiは2.4GHzのみ。iPhoneのテザリングは「互換性を優先」をオンに。</li>
+  </ul>
+</main>
+</body>
+</html>

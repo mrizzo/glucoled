@@ -3,6 +3,7 @@
 #   ./build.sh            compile only
 #   ./build.sh upload     compile + flash to the first USB serial port found
 # Settings are entered on the board's setup page; secrets.h (optional) only sets defaults.
+#   NOSECRETS=1           build without secrets.h (for the public flasher; see make_site.sh)
 # Pick the board with BOARD= (default ideaspark):
 #   BOARD=ideaspark   ideaspark ESP32 1.9" ST7789 (CH340 USB)
 #   BOARD=tdisplays3  LilyGO T-Display S3 (ESP32-S3 native USB)
@@ -16,6 +17,9 @@ case "$BOARD" in
 esac
 FLAGS="-include $(pwd)/$HDR"
 BUILD="build/$BOARD"
+if [ "${NOSECRETS:-}" = 1 ]; then          # public firmware: ignore secrets.h even if present
+  FLAGS="$FLAGS -DGLUCOLED_NO_SECRETS"; BUILD="build/public-$BOARD"
+fi
 arduino-cli compile --fqbn "$FQBN" --build-path "$BUILD" \
   --build-property "compiler.cpp.extra_flags=$FLAGS" \
   --build-property "compiler.c.extra_flags=$FLAGS" .
