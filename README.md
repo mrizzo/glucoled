@@ -2,6 +2,8 @@
 
 English | [日本語](README.ja.md)
 
+**For diabetics who just want to see their blood sugar at a glance.**
+
 A tiny desk/car display for your glucose, from [Nightscout](https://nightscout.github.io/) or
 straight from **Dexcom Share** (including Japanese Dexcom accounts):
 **just the number and the trend arrow**. No alarms, no graphs, no app.

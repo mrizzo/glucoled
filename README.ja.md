@@ -2,6 +2,8 @@
 
 [English](README.md) | 日本語
 
+**血糖値をひと目で確認したい糖尿病の方へ。**
+
 **Dexcom Share**（日本のDexcomアカウント対応）または [Nightscout](https://nightscout.github.io/) から、
 **血糖値とトレンド矢印だけ**を表示する小さなディスプレイです。机、車、バイク、ベッドサイドに。
 アラームもグラフもアプリもありません。
