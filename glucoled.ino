@@ -630,7 +630,11 @@ void drawDebug() {
   tft.setTextPadding(w);                           // overwrite old text without clearing (no flicker)
   auto line = [&](uint16_t c, const String& t) { tft.setTextColor(c, TFT_BLACK); tft.drawString(t, 4, y); y += lh; };
 
-  line(TFT_YELLOW, String("Glucoled ") + FW_VERSION + "   debug  (press to close)");
+  String bat = "   debug";
+#ifdef BOARD_BATTERY_PIN
+  bat = "   " + String(analogReadMilliVolts(BOARD_BATTERY_PIN) * 2 / 1000.0, 2) + " V";   // board halves it
+#endif
+  line(TFT_YELLOW, String("Glucoled ") + FW_VERSION + bat + "   (press to close)");
   if (WiFi.status() == WL_CONNECTED) {
     line(TFT_WHITE, "WiFi  " + ascii(WiFi.SSID()) + "  " + WiFi.RSSI() + " dBm");
     line(TFT_WHITE, "IP    " + WiFi.localIP().toString());

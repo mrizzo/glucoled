@@ -32,3 +32,5 @@
 #define SMOOTH_FONT
 // GPIO15 powers the screen: must be driven HIGH or the display stays dark on battery.
 #define BOARD_POWER_PIN 15
+// Battery (JST 1.25 connector) through a 1:2 divider to GPIO4; shown on the debug page.
+#define BOARD_BATTERY_PIN 4
