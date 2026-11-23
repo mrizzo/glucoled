@@ -118,6 +118,13 @@ const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
 const int      STALE_MIN       = 11;            // minutes old before it's flagged OLD
 const char*    FW_VERSION      = "0.6.0";
+#ifdef FW_GIT                                      // set by build.sh: short commit hash, "+" if modified
+#define GLUCOLED_STR2(x) #x
+#define GLUCOLED_STR(x) GLUCOLED_STR2(x)
+const char*    FW_COMMIT       = GLUCOLED_STR(FW_GIT);
+#else
+const char*    FW_COMMIT       = "";
+#endif
 #ifndef BOARD_BUTTON
 #define BOARD_BUTTON 0                             // BOOT button on most ESP32 boards
 #endif
@@ -669,7 +676,7 @@ void drawDebug() {
   line(TFT_WHITE, "Reading  " + (lastSgv < 0 ? String("--") : sgvText(lastSgv) + " " + lastDir) +
                   (age < 0 ? String("") : ", " + String(age) + "m old") +
                   (lastSrc[0] ? String(", ") + lastSrc : String("")));
-  line(TFT_WHITE, "Up " + ago(millis()) + "   heap " + String(ESP.getFreeHeap() / 1024) + " KB");
+  line(TFT_WHITE, "Up " + ago(millis()) + "   heap " + String(ESP.getFreeHeap() / 1024) + " KB   " + FW_COMMIT);
   String bt = !bleOn ? String("off (hold button 2s)")
             : bleConnected ? "connected"
             : "advertising, " + ago(BLE_ON_MS - (millis() - bleOnAt)) + " left";
@@ -735,7 +742,7 @@ void setup() {
   tft.setTextFont(2); tft.setTextColor(TFT_WHITE);
   tft.setTextDatum(TL_DATUM);
   tft.drawString("Connecting WiFi...", 10, 10);
-  logf("boot: Glucoled %s on %s, reset: %s", FW_VERSION, ARDUINO_BOARD, resetReason());
+  logf("boot: Glucoled %s %s on %s, reset: %s", FW_VERSION, FW_COMMIT, ARDUINO_BOARD, resetReason());
   logf("settings: %s", loadConfig() ? "from setup page" : "defaults (nothing saved yet)");
   if (!haveWifi() || (!useNs() && !useDexcom())) enterSetup("not set up yet");   // first boot
   if (useNs() && useDexcom()) logf("source: Nightscout, Dexcom (%s) as backup", cfg.dexRegion.c_str());

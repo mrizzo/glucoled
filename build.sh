@@ -16,6 +16,12 @@ case "$BOARD" in
   *) echo "unknown BOARD=$BOARD (ideaspark | tdisplays3)"; exit 1 ;;
 esac
 FLAGS="-include $(pwd)/$HDR"
+# Stamp the git commit into the firmware (shown on the debug and setup pages); "+" = uncommitted changes.
+GIT=$(git rev-parse --short HEAD 2>/dev/null || true)
+if [ -n "$GIT" ]; then
+  git diff --quiet HEAD -- . 2>/dev/null || GIT="$GIT+"
+  FLAGS="$FLAGS -DFW_GIT=$GIT"
+fi
 BUILD="build/$BOARD"
 if [ "${NOSECRETS:-}" = 1 ]; then          # public firmware: ignore secrets.h even if present
   FLAGS="$FLAGS -DGLUCOLED_NO_SECRETS"; BUILD="build/public-$BOARD"
