@@ -19,6 +19,7 @@ straight from **Dexcom Share** (including Japanese Dexcom accounts):
   in `secrets.h`).
 - **Grey** when the latest reading is older than 11 minutes (or the board doesn't know the
   time yet), so a stale value never looks current.
+- **mg/dL or mmol/L**, chosen on the setup page (colours use the same ranges either way).
 - Waits up to **15 seconds** for Nightscout to answer, so slow hosted sites (some take ~5 s
   on a cold request) don't make it give up.
 - Shows the **time** (HH:MM) above the number, set from the internet, so it doubles as a desk clock.
@@ -101,6 +102,7 @@ On first start the screen shows **Glucoled setup** with a QR code.
    - **Dexcom:** the sensor wearer's login and the account's region, and/or
    - **Nightscout:** your site's address (and a read token if it needs one).
    - **Time zone** for the clock.
+   - **Units**: mg/dL or mmol/L.
 4. Tap **Save and restart**. Your number appears within about 20 seconds and refreshes every
    60 seconds.
 

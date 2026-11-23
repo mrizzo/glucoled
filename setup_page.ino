@@ -144,6 +144,9 @@ void sendForm(const String& error) {
   h += "<label>Other time zone (POSIX, e.g. EST5EDT,M3.2.0,M11.1.0)</label><input name=tzc autocapitalize=off "
        "value=\"" + (known ? String("") : esc(cfg.tz)) + "\">";
 
+  h += String("<h2>Units / 単位</h2><select name=un><option value=mgdl") + (cfg.mmol ? "" : " selected") +
+       ">mg/dL</option><option value=mmol" + (cfg.mmol ? " selected" : "") + ">mmol/L</option></select>";
+
   h += "<button>Save and restart / 保存して再起動</button></form>";
   h += "<form method=post action=/erase onsubmit=\"return confirm('Erase all settings?')\">"
        "<button class=x>Erase all settings / 設定を消去</button></form></body></html>";
@@ -182,6 +185,7 @@ void handleSave() {
   String tz = setupWeb.arg("tz");
   if (tz == "custom") { tz = setupWeb.arg("tzc"); tz.trim(); }
   c.tz = tz.length() ? tz : "JST-9";
+  c.mmol = setupWeb.arg("un") == "mmol";
 
   if (n == 0) { cfg = c; return sendForm("Add at least one WiFi network."); }
   bool dex = c.dexUser.length() && c.dexPass.length(), ns = c.nsHost.length();

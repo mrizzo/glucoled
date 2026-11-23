@@ -41,6 +41,7 @@ struct Config {
   String nsHost, nsToken;                          // Nightscout (token optional, read-only is enough)
   String dexUser, dexPass, dexRegion = "us";       // Dexcom Share: the sensor WEARER's login
   String tz = "JST-9";                             // POSIX time zone for the clock
+  bool mmol = false;                               // show mmol/L instead of mg/dL
 } cfg;
 
 struct WifiNet { const char* ssid; const char* pass; };
@@ -65,6 +66,7 @@ bool loadConfig() {                                // true if the setup page has
     cfg.nsHost = p.getString("nsHost", ""); cfg.nsToken = p.getString("nsToken", "");
     cfg.dexUser = p.getString("dexUser", ""); cfg.dexPass = p.getString("dexPass", "");
     cfg.dexRegion = p.getString("dexRegion", "us"); cfg.tz = p.getString("tz", "JST-9");
+    cfg.mmol = p.getBool("mmol", false);
   } else {
     int n = 0;
     for (const WifiNet& w : DEFAULT_NETS)
@@ -84,6 +86,9 @@ bool loadConfig() {                                // true if the setup page has
 #ifdef SECRET_TZ
     cfg.tz = SECRET_TZ;
 #endif
+#ifdef SECRET_MMOL
+    cfg.mmol = true;
+#endif
   }
   p.end();
   return saved;
@@ -99,6 +104,7 @@ void saveConfig() {
   p.putString("nsHost", cfg.nsHost); p.putString("nsToken", cfg.nsToken);
   p.putString("dexUser", cfg.dexUser); p.putString("dexPass", cfg.dexPass);
   p.putString("dexRegion", cfg.dexRegion); p.putString("tz", cfg.tz);
+  p.putBool("mmol", cfg.mmol);
   p.putBool("saved", true);
   p.end();
 }
@@ -568,6 +574,12 @@ uint16_t rangeColour(int sgv) {
   return tft.color565(240, 150, 76);                              // very high: orange
 }
 
+// Readings are mg/dL everywhere inside (sources, range colours); only the text shown changes.
+String sgvText(int sgv) {
+  if (sgv < 0) return "--";
+  return cfg.mmol ? String(sgv / 18.0, 1) : String(sgv);
+}
+
 // Just the number and the trend arrow, coloured by range. Grey when the reading is
 // older than STALE_MIN (or the clock isn't set yet) - no alarms, no extra text.
 void render() {
@@ -582,7 +594,7 @@ void render() {
   tft.setTextDatum(MR_DATUM);
   int numRight = tft.width() - 90;                 // leave room on the right for the arrow
   int cy = (tft.height() + CLOCK_H) / 2;          // centred in the space below the clock
-  tft.drawString(lastSgv < 0 ? "--" : String(lastSgv), numRight, cy);
+  tft.drawString(sgvText(lastSgv), numRight, cy);
   tft.setTextSize(1);
 
   static const char* KNOWN[] = {"DoubleUp", "SingleUp", "FortyFiveUp", "Flat",
@@ -654,7 +666,7 @@ void drawDebug() {
   line(TFT_WHITE, "OK/fail  NS " + String(nsStat.ok) + "/" + String(nsStat.fail) +
                   "   Dex " + String(dexStat.ok) + "/" + String(dexStat.fail));
   long age = ageMinutes();
-  line(TFT_WHITE, "Reading  " + (lastSgv < 0 ? String("--") : String(lastSgv) + " " + lastDir) +
+  line(TFT_WHITE, "Reading  " + (lastSgv < 0 ? String("--") : sgvText(lastSgv) + " " + lastDir) +
                   (age < 0 ? String("") : ", " + String(age) + "m old") +
                   (lastSrc[0] ? String(", ") + lastSrc : String("")));
   line(TFT_WHITE, "Up " + ago(millis()) + "   heap " + String(ESP.getFreeHeap() / 1024) + " KB");
