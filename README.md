@@ -4,6 +4,9 @@ English | [日本語](README.ja.md)
 
 **For diabetics who just want to see their blood sugar at a glance.**
 
+An affordable HUD for your blood sugar: on the bike, in the car, at your desk, by your bed.
+No unlocking your phone, no turning your wrist.
+
 A tiny desk/car display for your glucose, from [Nightscout](https://nightscout.github.io/) or
 straight from **Dexcom Share** (including Japanese Dexcom accounts):
 **just the number and the trend arrow**. No alarms, no graphs, no app.
