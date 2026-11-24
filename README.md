@@ -44,7 +44,7 @@ Both boards are tested and run the same code. Pick one:
 
 | Board | Where | Notes |
 |---|---|---|
-| **ideaspark ESP32 1.9" ST7789 170×320** (ESP32-WROOM-32, CH340 USB-C) | Amazon JP, ~¥2,000 | Default. Power from USB or a USB power bank. |
+| **ideaspark ESP32 1.9" ST7789 170×320** (ESP32-WROOM-32, CH340 USB-C) | Amazon JP, ~¥2,000 | Default. Power from USB or a USB power bank. 3D-printable case: [case/ideaspark](case/ideaspark/). |
 | **LilyGO T-Display S3** (ESP32-S3, 1.9" 170×320) | [LilyGO store](https://lilygo.cc/products/t-display-s3?variant=42585826558133), ~US$15 | Has a battery connector with charging and two buttons. |
 
 Use a USB-C **data** cable. Charge-only cables won't show the board.

@@ -36,7 +36,7 @@
 
 - **LilyGO T-Display S3**（1.9インチの通常版。AMOLED・Pro・Long版は不可）。ケース付きがおすすめです。
   [LilyGO公式ストア](https://lilygo.cc/products/t-display-s3?variant=42585826558133)
-  ideaspark ESP32 1.9インチボードでも動きます。
+  ideaspark ESP32 1.9インチボードでも動きます（3Dプリント用ケース：[case/ideaspark](case/ideaspark/)）。
 - **データ通信できるUSB-Cケーブル**（充電専用ケーブルは不可）
 - **ChromeかEdgeが使えるパソコン**（Mac・Windows・Linux。Safariとスマホではインストールできません）
 - センサー装着者本人の**Dexcomのメールアドレスとパスワード**
