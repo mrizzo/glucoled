@@ -136,6 +136,11 @@ T-Display S3では、画面を横にしてUSBを右にしたときの**下のボ
 
 Arduinoでのビルド、別のボードへの対応、仕組みの説明は [英語のREADME](README.md) を見てください。
 
+## お礼
+
+Glucoledは無料です。役に立ったら、[日本IDDMネットワーク](https://japan-iddm.net/)への寄付をご検討いただくか、
+[ひと言お礼](https://github.com/mrizzo/glucoled/discussions)をいただけたらうれしいです。
+
 ## ライセンス
 
 MIT。[LICENSE](LICENSE) を参照。

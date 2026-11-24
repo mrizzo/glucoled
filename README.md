@@ -206,6 +206,12 @@ Every 60 s it fetches the latest reading and computes its age against NTP time.
   that session until it expires. Because this sends your password, the server certificate
   **is** verified, against the root CAs in `dexcom_roots.h`.
 
+## Thanks
+
+Glucoled is free. If it helps you, please consider a donation to
+[Breakthrough T1D](https://www.breakthrought1d.org/) (formerly JDRF), or just
+[say thanks](https://github.com/mrizzo/glucoled/discussions).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
