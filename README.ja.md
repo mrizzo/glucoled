@@ -11,6 +11,8 @@
 **血糖値とトレンド矢印だけ**を表示する小さなディスプレイです。机、車、バイク、ベッドサイドに。
 アラームもグラフもアプリもありません。
 
+オープンソースのソフトと市販のボードだけ。月額料金なし、はんだ付けなし、プログラミングなし。
+
 <p align="center">
   <img src="docs/ideaspark.jpg" alt="机の上のideaspark ESP32ボード。19:04、NS、緑色の93と横向き矢印を表示" width="49%">
   <img src="docs/tdisplay-s3.jpg" alt="バイクのメーター上のLilyGO T-Display S3。緑色の96と横向き矢印を表示" width="49%">
@@ -50,6 +52,7 @@
 
 **[glucoled.com](https://glucoled.com)** をパソコンのChromeかEdgeで開き、画面の手順に従ってください。
 クリックするところすべてに画像付きの説明があります。
+設定の動画：[youtube.com/@GlucoLED](https://www.youtube.com/@GlucoLED)
 
 1. ボードをUSBでパソコンにつなぎ、**Install Glucoled** を押す。
 2. 一覧から **USB JTAG/serial debug unit** の行をクリックして「接続」。
@@ -126,6 +129,7 @@ T-Display S3では、画面を横にしてUSBを右にしたときの**下のボ
 | 「No WiFi. Hold the button 6 s for setup」 | WiFi名・パスワードの間違いか5GHz。6秒長押しで設定し直す |
 | 設定画面が開かない | Glucoled-Setupに接続したまま、ブラウザで `192.168.4.1` を開く。モバイルデータをオフにすると安定します |
 | 「--」と表示される | WiFiはOKでも値が取れていません。Dexcomのメール・パスワード・**地域**、アプリの共有設定を確認。短く押してデバッグ画面で理由を確認できます |
+| 「Nightscout certificate not trusted」 | Nightscoutのサイトが自己署名証明書を使っています。Let's Encryptなどの正式な証明書にしてください |
 | 数値がずっとグレー | 11分以上新しい値がありません。Dexcomアプリが動いて共有しているか確認 |
 
 ## ログを見る（Bluetooth）
@@ -138,10 +142,22 @@ T-Display S3では、画面を横にしてUSBを右にしたときの**下のボ
 
 Arduinoでのビルド、別のボードへの対応、仕組みの説明は [英語のREADME](README.md) を見てください。
 
-## お礼
+## 無料です
 
-Glucoledは無料です。役に立ったら、[日本IDDMネットワーク](https://japan-iddm.net/)への寄付をご検討いただくか、
-[ひと言お礼](https://github.com/mrizzo/glucoled/discussions)をいただけたらうれしいです。
+**Glucoledは無料です。これからもずっと。**
+
+お支払いは不要で、寄付もお受けしていません。役に立ったと思っていただけたら、代わりに
+[日本IDDMネットワーク](https://japan-iddm.net/)など、お好きな糖尿病の支援団体への寄付をご検討ください。
+
+私は1992年から1型糖尿病とともに暮らしています。シンプルで、確実で、手頃なものが欲しくてGlucoledを作りました。
+同じように役立つ方がいるかもしれないと思い、公開しています。
+毎日が少しでも楽になったなら、それで十分です。
+[ひと言いただける](https://github.com/mrizzo/glucoled/discussions)のも大歓迎です。
+
+## 関連プロジェクト
+
+- [M5StickC NightscoutMon](https://github.com/mlukasek/M5StickC_NightscoutMon)（mlukasek）：M5Stack向けの
+  歴史あるNightscoutモニター。アラームや画面の情報量が欲しい方にはおすすめです。
 
 ## ライセンス
 

@@ -11,6 +11,8 @@ A tiny desk/car display for your glucose, from [Nightscout](https://nightscout.g
 straight from **Dexcom Share** (including Japanese Dexcom accounts):
 **just the number and the trend arrow**. No alarms, no graphs, no app.
 
+Open-source software on an off-the-shelf board. No subscription, no soldering, no programming.
+
 <p align="center">
   <img src="docs/ideaspark.jpg" alt="Glucoled on the ideaspark ESP32 1.9-inch board on a desk, showing 19:04, NS and a green 93 with a flat arrow" width="49%">
   <img src="docs/tdisplay-s3.jpg" alt="Glucoled on a LilyGO T-Display S3 mounted on a motorcycle dash at night, showing a green 96 with a flat arrow" width="49%">
@@ -34,6 +36,7 @@ straight from **Dexcom Share** (including Japanese Dexcom accounts):
 **No tools needed:** open **[glucoled.com](https://glucoled.com)** in Chrome or Edge,
 plug in the board and click **Install**, then set it up from your phone. The page walks through every click,
 in English and Japanese.
+Setup videos: [youtube.com/@GlucoLED](https://www.youtube.com/@GlucoLED).
 （日本語の説明は [README.ja.md](README.ja.md)。）
 
 The rest of this README is for building it yourself.
@@ -159,7 +162,7 @@ something is saved on the setup page.
 | `board not found` | Use a data cable, or try another port/hub. |
 | "No WiFi. Hold the button 6 s for setup" | Check the WiFi name/password on the setup page (exact spelling), and that it's 2.4 GHz. |
 | The setup page doesn't pop up | Open `http://192.168.4.1` in the phone's browser while joined to Glucoled-Setup. Turn off mobile data if the phone keeps leaving the network. |
-| `--` instead of a number | WiFi works, but the data source didn't answer. Open the debug page (below) for the reason. Nightscout: check the address and token. Dexcom: check the login, region and that Share is on. |
+| `--` instead of a number | WiFi works, but the data source didn't answer. Open the debug page (below) for the reason. Nightscout: check the address and token; "certificate not trusted" means the site uses a self-signed certificate, so give it a real one (e.g. Let's Encrypt). Dexcom: check the login, region and that Share is on. |
 | Number is always grey | No new reading for 11+ minutes. Check Nightscout itself, or that the Dexcom app is running and sharing. |
 | Colours inverted (ideaspark) | In `board_ideaspark_19.h`, swap `TFT_INVERSION_ON` for `TFT_INVERSION_OFF`. |
 
@@ -200,18 +203,31 @@ If the board gates display power on a pin (like the T-Display S3's GPIO15), defi
 Every 60 s it fetches the latest reading and computes its age against NTP time.
 
 - **Nightscout:** `https://<host>/api/v1/entries/sgv.json?count=1`, keeping only `sgv`, `date`
-  and `direction`. The certificate isn't verified (`setInsecure()`), which keeps setup simple.
-  The worst case is someone on your network showing you a fake number, so don't rely on it for
-  treatment (see above).
+  and `direction`. The certificate is verified against the standard root CAs built into the
+  ESP32 core (the same ones browsers trust), so any normally hosted site works, and nobody on the
+  network can read your token or show you a fake number. A self-signed certificate won't work.
 - **Dexcom Share:** logs in once (account ID, then session ID), then reads the latest value with
   that session until it expires. Because this sends your password, the server certificate
   **is** verified, against the root CAs in `dexcom_roots.h`.
 
-## Thanks
+## Free
 
-Glucoled is free. If it helps you, please consider a donation to
-[Breakthrough T1D](https://www.breakthrought1d.org/) (formerly JDRF), or just
-[say thanks](https://github.com/mrizzo/glucoled/discussions).
+**Glucoled is free. Always.**
+
+There's nothing to pay, and I don't accept donations. If Glucoled helps you, consider supporting a
+diabetes charity of your choice instead, such as [Breakthrough T1D](https://www.breakthrought1d.org/) or the
+[Japan IDDM Network](https://japan-iddm.net/).
+
+I've lived with type 1 diabetes since 1992. I built Glucoled because I wanted something simple,
+reliable and affordable, and I'm sharing it because others might find it useful too.
+If it makes your life a little easier, that's enough for me.
+You're always welcome to [say hello](https://github.com/mrizzo/glucoled/discussions).
+
+## Related projects
+
+- [M5StickC NightscoutMon](https://github.com/mlukasek/M5StickC_NightscoutMon) by mlukasek: a
+  long-standing Nightscout monitor for M5Stack devices, with alarms and more on the screen.
+  If you want those, it's an excellent choice.
 
 ## License
 

@@ -123,7 +123,7 @@ const char*    HOSTNAME  = "Glucoled";         // name shown in your router / De
 const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
 const int      STALE_MIN       = 11;            // minutes old before it's flagged OLD
-const char*    FW_VERSION      = "0.7.0";
+const char*    FW_VERSION      = "0.7.1";
 // Release name per major version, alphabetical sugars: 0.x Glucose (beta), 1.x Dextrose, 2.x Erythrose,
 // 3.x Fructose, 4.x Galactose, ...
 const char*    FW_NAME         = "Glucose";
@@ -145,6 +145,11 @@ const uint32_t DEBUG_PAGE_MS   = 2UL * 60 * 1000;   // debug page returns to the
 
 TFT_eSPI tft = TFT_eSPI();
 WiFiClientSecure tls;
+// Mozilla's root CA list, as built into the ESP32 core (the same roots browsers trust). Nightscout
+// can be hosted anywhere (Heroku, Fly, Railway, self-hosted with Let's Encrypt...), so verify
+// against all of them instead of pinning one CA.
+extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
+extern const uint8_t rootca_crt_bundle_end[]   asm("_binary_x509_crt_bundle_end");
 WiFiMulti wifiMulti;                               // joins whichever known network is in range
 
 int    lastSgv     = -1;
@@ -348,7 +353,10 @@ bool fetch() {
 
 // ---------------- Nightscout ----------------
 bool nsFetch() {
-  tls.setInsecure();                               // skip cert checks (simple + robust)
+  if (time(nullptr) < 1000000000L) {               // certificate dates can't be checked without a clock
+    nsErr = "waiting for clock"; fetchNoRetry = true; return false;
+  }
+  tls.setCACertBundle(rootca_crt_bundle_start, rootca_crt_bundle_end - rootca_crt_bundle_start);
   HTTPClient http;
   String url = "https://" + cfg.nsHost + "/api/v1/entries/sgv.json?count=1";
   if (usable(cfg.nsToken))                         // token optional: not needed when the site is readable
@@ -360,6 +368,12 @@ bool nsFetch() {
   nsCode = code;
   if (code != 200) {
     nsErr = code < 0 ? HTTPClient::errorToString(code) : String("HTTP ") + code;
+    char tlsMsg[100];
+    int tlsErr = code < 0 ? tls.lastError(tlsMsg, sizeof tlsMsg) : 0;
+    if (tlsErr == -0x2700)                         // MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
+      nsErr = "Nightscout certificate not trusted (self-signed?)";
+    else if (tlsErr)
+      nsErr += String(" (tls: ") + tlsMsg + ")";
     http.end(); return false;
   }
 
