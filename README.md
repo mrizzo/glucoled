@@ -106,6 +106,7 @@ On first start the screen shows **Glucoled setup** with a QR code.
    - **Nightscout:** your site's address (and a read token if it needs one).
    - **Time zone** for the clock.
    - **Units**: mg/dL or mmol/L.
+   - **Clock**: 24-hour (15:42) or 12-hour (3:42 PM).
 4. Tap **Save and restart**. Your number appears within about 20 seconds and refreshes every
    60 seconds.
 

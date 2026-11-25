@@ -42,6 +42,7 @@ struct Config {
   String dexUser, dexPass, dexRegion = "us";       // Dexcom Share: the sensor WEARER's login
   String tz = "JST-9";                             // POSIX time zone for the clock
   bool mmol = false;                               // show mmol/L instead of mg/dL
+  bool clock12 = false;                            // 12-hour clock (3:42 PM) instead of 24-hour
 } cfg;
 
 struct WifiNet { const char* ssid; const char* pass; };
@@ -67,6 +68,7 @@ bool loadConfig() {                                // true if the setup page has
     cfg.dexUser = p.getString("dexUser", ""); cfg.dexPass = p.getString("dexPass", "");
     cfg.dexRegion = p.getString("dexRegion", "us"); cfg.tz = p.getString("tz", "JST-9");
     cfg.mmol = p.getBool("mmol", false);
+    cfg.clock12 = p.getBool("clock12", false);
   } else {
     int n = 0;
     for (const WifiNet& w : DEFAULT_NETS)
@@ -89,6 +91,9 @@ bool loadConfig() {                                // true if the setup page has
 #ifdef SECRET_MMOL
     cfg.mmol = true;
 #endif
+#ifdef SECRET_CLOCK12
+    cfg.clock12 = true;
+#endif
   }
   p.end();
   return saved;
@@ -105,6 +110,7 @@ void saveConfig() {
   p.putString("dexUser", cfg.dexUser); p.putString("dexPass", cfg.dexPass);
   p.putString("dexRegion", cfg.dexRegion); p.putString("tz", cfg.tz);
   p.putBool("mmol", cfg.mmol);
+  p.putBool("clock12", cfg.clock12);
   p.putBool("saved", true);
   p.end();
 }
@@ -551,8 +557,11 @@ void drawClock() {
   }
   if (now < 1000000000L) { lastClockMin = -1; return; }  // NTP not ready: show nothing
   localtime_r(&now, &t);
-  char buf[6];
-  snprintf(buf, sizeof buf, "%02d:%02d", t.tm_hour, t.tm_min);
+  char buf[12];
+  if (cfg.clock12)
+    snprintf(buf, sizeof buf, "%d:%02d %s", (t.tm_hour + 11) % 12 + 1, t.tm_min, t.tm_hour < 12 ? "AM" : "PM");
+  else
+    snprintf(buf, sizeof buf, "%02d:%02d", t.tm_hour, t.tm_min);
   tft.setTextFont(4); tft.setTextSize(1);
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   tft.setTextDatum(TC_DATUM);

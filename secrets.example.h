@@ -19,3 +19,4 @@
 // #define SECRET_DEXCOM_REGION "jp"   // "us", "ous" (outside the US) or "jp" (Japan)
 // #define SECRET_TZ "PST8PDT,M3.2.0,M11.1.0"   // optional clock time zone (default JST-9)
 // #define SECRET_MMOL                           // optional: show mmol/L instead of mg/dL
+// #define SECRET_CLOCK12                        // optional: 12-hour clock (3:42 PM)

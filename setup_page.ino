@@ -146,6 +146,8 @@ void sendForm(const String& error) {
 
   h += String("<h2>Units / 単位</h2><select name=un><option value=mgdl") + (cfg.mmol ? "" : " selected") +
        ">mg/dL</option><option value=mmol" + (cfg.mmol ? " selected" : "") + ">mmol/L</option></select>";
+  h += String("<h2>Clock / 時計</h2><select name=ck><option value=24") + (cfg.clock12 ? "" : " selected") +
+       ">24-hour (15:42)</option><option value=12" + (cfg.clock12 ? " selected" : "") + ">12-hour (3:42 PM)</option></select>";
 
   h += "<button>Save and restart / 保存して再起動</button></form>";
   h += "<form method=post action=/erase onsubmit=\"return confirm('Erase all settings?')\">"
@@ -186,6 +188,7 @@ void handleSave() {
   if (tz == "custom") { tz = setupWeb.arg("tzc"); tz.trim(); }
   c.tz = tz.length() ? tz : "JST-9";
   c.mmol = setupWeb.arg("un") == "mmol";
+  c.clock12 = setupWeb.arg("ck") == "12";
 
   if (n == 0) { cfg = c; return sendForm("Add at least one WiFi network."); }
   bool dex = c.dexUser.length() && c.dexPass.length(), ns = c.nsHost.length();
