@@ -123,7 +123,10 @@ const char*    HOSTNAME  = "Glucoled";         // name shown in your router / De
 const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
 const int      STALE_MIN       = 11;            // minutes old before it's flagged OLD
-const char*    FW_VERSION      = "0.6.0";
+const char*    FW_VERSION      = "0.7.0";
+// Release name per major version, alphabetical sugars: 0.x Glucose (beta), 1.x Dextrose, 2.x Erythrose,
+// 3.x Fructose, 4.x Galactose, ...
+const char*    FW_NAME         = "Glucose";
 #ifdef FW_GIT                                      // set by build.sh: short commit hash, "+" if modified
 #define GLUCOLED_STR2(x) #x
 #define GLUCOLED_STR(x) GLUCOLED_STR2(x)
@@ -751,7 +754,7 @@ void setup() {
   tft.setTextFont(2); tft.setTextColor(TFT_WHITE);
   tft.setTextDatum(TL_DATUM);
   tft.drawString("Connecting WiFi...", 10, 10);
-  logf("boot: Glucoled %s %s on %s, reset: %s", FW_VERSION, FW_COMMIT, ARDUINO_BOARD, resetReason());
+  logf("boot: Glucoled %s %s %s on %s, reset: %s", FW_VERSION, FW_NAME, FW_COMMIT, ARDUINO_BOARD, resetReason());
   logf("settings: %s", loadConfig() ? "from setup page" : "defaults (nothing saved yet)");
   if (!haveWifi() || (!useNs() && !useDexcom())) enterSetup("not set up yet");   // first boot
   if (useNs() && useDexcom()) logf("source: Nightscout, Dexcom (%s) as backup", cfg.dexRegion.c_str());

@@ -96,7 +96,7 @@ static const char* TZS[][2] = {
 
 void sendForm(const String& error) {
   String h = FPSTR(PAGE_HEAD);
-  h += "<h1>Glucoled setup</h1><p class=s>Glucoled " + String(FW_VERSION) +
+  h += "<h1>Glucoled setup</h1><p class=s>Glucoled " + String(FW_VERSION) + " " + FW_NAME +
        (FW_COMMIT[0] ? " (" + String(FW_COMMIT) + ")" : String("")) + ". Settings are saved on this board only.</p>";
   if (error.length()) h += "<p class=e>" + esc(error) + "</p>";
   h += "<form method=post action=/save>";
