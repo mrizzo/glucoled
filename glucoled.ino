@@ -123,7 +123,7 @@ const char*    HOSTNAME  = "Glucoled";         // name shown in your router / De
 const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
 const int      STALE_MIN       = 11;            // minutes old before it's flagged OLD
-const char*    FW_VERSION      = "0.7.1";
+const char*    FW_VERSION = "0.8.0";
 // Release name per major version, alphabetical sugars: 0.x Glucose (beta), 1.x Dextrose, 2.x Erythrose,
 // 3.x Fructose, 4.x Galactose, ...
 const char*    FW_NAME         = "Glucose";
@@ -790,6 +790,7 @@ wl_status_t lastWifi = WL_IDLE_STATUS;
 
 void loop() {
   pollButton();
+  improvPoll();                                    // the install page asking over USB
   if (millis() - lastPoll >= POLL_MS) {
     lastPoll = millis();
     fetch();        // if it fails, we keep the last value and the age flags it OLD

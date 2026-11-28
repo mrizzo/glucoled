@@ -39,8 +39,9 @@ Just your number, when you want to look.
 ## Install
 
 **No tools needed:** open **[glucoled.com](https://glucoled.com)** in Chrome or Edge,
-plug in the board and click **Install**, then set it up from your phone. The page walks through every click,
-in English and Japanese.
+plug in the board and click **Install**. Right after installing, the same page asks for your WiFi, then opens
+Glucoled's setup page so you can enter your Dexcom login on the computer too. (Setting it up from your phone also
+works.) The page walks through every click, in English and Japanese.
 Setup videos: [youtube.com/@GlucoLED](https://www.youtube.com/@GlucoLED).
 （日本語の説明は [README.ja.md](README.ja.md)。）
 
@@ -95,9 +96,22 @@ BOARD=tdisplays3 ./build.sh upload   # LilyGO T-Display S3
 `./build.sh` without `upload` only compiles. The port is auto-detected; override it with
 `PORT=/dev/cu.xxx`.
 
-### 3. Set it up from your phone
+### 3. Set it up
 
-On first start the screen shows **Glucoled setup** with a QR code.
+**From the install page (glucoled.com):** right after installing, the page shows **Connect to Wi-Fi**.
+Pick your network and type its password; it's sent to the board over the USB cable
+([Improv Serial](https://www.improv-wifi.com/serial/)). Once the board has joined, click **Visit Device** to open
+the setup page over your home network and fill in the rest, as in step 3 below. The board's screen also shows that
+address, with a QR code for a phone on the same WiFi. The page is reachable on your network only until you save.
+
+**From your phone** (or if you built it yourself): on first start the screen shows **Glucoled setup** with a QR code.
+
+**Have these written down first.** While your phone is on the Glucoled-Setup network it has no
+internet, so you can't look anything up until you tap Save:
+
+- the name and password of each WiFi network you want (home, phone hotspot, office…)
+- the sensor wearer's **Dexcom email and password**, and the account's region
+- your Nightscout address and read token, if you use Nightscout
 
 <p align="center">
   <img src="docs/setup-screen.jpg" alt="Glucoled setup screen on a T-Display S3: a QR code, the Glucoled-Setup network name, a one-time password and the steps" width="58%">
@@ -214,6 +228,10 @@ Every 60 s it fetches the latest reading and computes its age against NTP time.
 - **Dexcom Share:** logs in once (account ID, then session ID), then reads the latest value with
   that session until it expires. Because this sends your password, the server certificate
   **is** verified, against the root CAs in `dexcom_roots.h`.
+- **Setup:** the setup page runs only while the setup screen is showing, on the board's own
+  Glucoled-Setup network (WPA2, a new random password each time). If the install page sent the WiFi
+  over USB (Improv Serial, `improv.ino`), the same page is also reachable on that network until you
+  save. Nothing listens on the network while the board is showing your number.
 
 ## Free
 

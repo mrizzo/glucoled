@@ -1,6 +1,8 @@
 // Setup page: the board makes its own WiFi network, the phone joins it (scan the QR code on
 // the screen), and a form opens for WiFi + Nightscout/Dexcom + time zone. Saving stores it on
 // the board and restarts. Runs only in setup mode: no web server is left running normally.
+// Right after installing, the install page can also send the WiFi over USB (improv.ino); the
+// same page is then reachable on the home network until it's saved.
 //
 // Setup mode starts on first boot (nothing set) or when the button is held 6 s.
 
@@ -27,16 +29,19 @@ void drawQrModules(esp_qrcode_handle_t q) {
         tft.fillRect(qrX + (x + 2) * qrScale, qrY + (y + 2) * qrScale, qrScale, qrScale, TFT_BLACK);
 }
 
-void drawSetupScreen() {
-  tft.fillScreen(TFT_BLACK);
-  // "WIFI:" QR codes join the network straight from the phone camera (iPhone and Android).
-  String join = String("WIFI:T:WPA;S:") + SETUP_SSID + ";P:" + setupPass + ";;";
+void drawQr(const String& text) {                 // left side of the screen
   qrScale = 4; qrX = 4; qrY = (tft.height() - 33 * qrScale) / 2;   // fits up to version 4 (33 modules)
   esp_qrcode_config_t qc = ESP_QRCODE_CONFIG_DEFAULT();
   qc.display_func = drawQrModules;
   qc.max_qrcode_version = 4;
   qc.qrcode_ecc_level = ESP_QRCODE_ECC_LOW;
-  esp_qrcode_generate(&qc, join.c_str());
+  esp_qrcode_generate(&qc, text.c_str());
+}
+
+void drawSetupScreen() {
+  tft.fillScreen(TFT_BLACK);
+  // "WIFI:" QR codes join the network straight from the phone camera (iPhone and Android).
+  drawQr(String("WIFI:T:WPA;S:") + SETUP_SSID + ";P:" + setupPass + ";;");
 
   int x = qrX + 33 * qrScale + 10, y = 6, lh = 17;
   tft.setTextFont(2); tft.setTextSize(1); tft.setTextDatum(TL_DATUM);
@@ -49,6 +54,24 @@ void drawSetupScreen() {
   line(TFT_CYAN, setupPass);
   line(TFT_WHITE, "2. Fill in the page");
   line(TFT_DARKGREY, "(or open 192.168.4.1)");
+  line(TFT_DARKGREY, "Press button to cancel");
+}
+
+// After the install page sent the WiFi (improv.ino): the setup page is now on the home network.
+void drawSetupLan() {
+  tft.fillScreen(TFT_BLACK);
+  drawQr(improvUrl);                               // a phone on the same WiFi can open it too
+  int x = qrX + 33 * qrScale + 10, y = 6, lh = 17;
+  tft.setTextFont(2); tft.setTextSize(1); tft.setTextDatum(TL_DATUM);
+  auto line = [&](uint16_t c, const String& t) { tft.setTextColor(c, TFT_BLACK); tft.drawString(t, x, y); y += lh; };
+  line(TFT_YELLOW, "Glucoled setup");
+  line(TFT_GREEN, "WiFi connected");
+  line(TFT_WHITE, "Finish on the");
+  line(TFT_WHITE, "computer: click");
+  line(TFT_WHITE, "\"Visit device\"");
+  line(TFT_DARKGREY, "or open:");
+  line(TFT_CYAN, WiFi.localIP().toString());
+  y += 4;
   line(TFT_DARKGREY, "Press button to cancel");
 }
 
@@ -202,8 +225,8 @@ void handleSave() {
   logf("setup: saved %d WiFi network(s), %s%s%s", n, dex ? "Dexcom " : "", dex ? c.dexRegion.c_str() : "",
        ns ? (dex ? " + Nightscout" : "Nightscout") : "");
   setupWeb.send(200, "text/html; charset=utf-8", String(FPSTR(PAGE_HEAD)) +
-    "<h1>Saved ✓</h1><p>Glucoled is restarting and will join your WiFi. You can close this page "
-    "and reconnect your phone to your normal WiFi.</p><p>保存しました。再起動します。</p></body></html>");
+    "<h1>Saved ✓</h1><p>Glucoled is restarting and will join your WiFi. You can close this page. "
+    "If your phone is on Glucoled-Setup, switch it back to your normal WiFi.</p><p>保存しました。再起動します。</p></body></html>");
   setupDone = true;
 }
 
@@ -218,7 +241,8 @@ void handleErase() {
 // Phones probe a known URL to detect a login page (captive portal). Answering every
 // request with a redirect to the form makes the setup page pop up by itself.
 void handleAny() {
-  setupWeb.sendHeader("Location", "http://192.168.4.1/", true);
+  // To whichever address the request came in on: 192.168.4.1, or the home network's.
+  setupWeb.sendHeader("Location", "http://" + setupWeb.client().localIP().toString() + "/", true);
   setupWeb.send(302, "text/plain", "");
 }
 
@@ -239,9 +263,11 @@ void enterSetup(const char* why) {
   for (int i = 0; i < found && i < 25; i++)
     if (WiFi.SSID(i).length() && scanList.indexOf("\"" + esc(WiFi.SSID(i)) + "\"") < 0)
       scanList += "<option value=\"" + esc(WiFi.SSID(i)) + "\">";
+  improvKeepScan(found);
   WiFi.scanDelete();
 
-  WiFi.mode(WIFI_AP);
+  improvInSetup = true;
+  WiFi.mode(WIFI_AP_STA);                          // STA stays idle unless the install page sends WiFi
   WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
   WiFi.softAP(SETUP_SSID, setupPass.c_str());
   setupDns.start(53, "*", IPAddress(192, 168, 4, 1));
@@ -258,6 +284,7 @@ void enterSetup(const char* why) {
   while (true) {
     setupDns.processNextRequest();
     setupWeb.handleClient();
+    improvPoll();
     if (setupDone && !doneAt) { doneAt = millis(); drawSetupMessage("Saved", "Restarting..."); }
     if (doneAt && millis() - doneAt > 1500) break;   // let the "saved" page reach the phone
     bool down = digitalRead(BOARD_BUTTON) == LOW;

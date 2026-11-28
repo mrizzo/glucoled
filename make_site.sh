@@ -45,6 +45,7 @@ cat > "$OUT/manifest.json" <<EOF
   "name": "Glucoled",
   "version": "$VER",
   "new_install_prompt_erase": true,
+  "new_install_improv_wait_time": 20,
   "builds": [
     {"chipFamily": "ESP32",    "parts": $(parts esp32 4096)},
     {"chipFamily": "ESP32-S3", "parts": $(parts esp32s3 0)}

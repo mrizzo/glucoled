@@ -97,8 +97,8 @@
     <li><div><b>Wait about 2 minutes.</b> Keep this page in front and don't unplug the board.
       <span class="ja">約2分待ちます。このページを表示したまま、ケーブルを抜かないでください。</span></div>
       <img src="img/5-progress.jpg" alt="Installing, 41%" style="max-width:260px"></li>
-    <li><div><b>Done!</b> Click Next and close the window. The board restarts and shows a QR code.
-      <span class="ja">完了！「Next」を押して閉じます。ボードが再起動してQRコードが表示されます。</span></div>
+    <li><div><b>Done!</b> Click <b>Next</b>. Keep the board plugged in for the next step.
+      <span class="ja">完了！「Next」をクリック。次の手順までケーブルはつないだままにしてください。</span></div>
       <img src="img/6-done.jpg" alt="Installation complete" style="max-width:240px"></li>
   </ol>
 
@@ -109,9 +109,33 @@
     <b>BOOT</b> button (the lower one) while plugging it in, try again, and press the reset button on the side afterwards.<br>
     <span class="ja">一覧に出ない：別のケーブルを試す。だめなら下のBOOTボタンを押しながらUSBを差し込み、再試行。終わったら側面のリセットボタン。</span></div>
 
-  <h2>3. Set it up (on your phone) <span class="ja">設定（スマホで）</span></h2>
-  <p>The board can now be unplugged from the computer and powered from any USB charger.
-    <span class="ja">パソコンから外して、USB充電器につないでもOKです。</span></p>
+  <h2>3. Set it up (on the computer) <span class="ja">設定（パソコンで）</span></h2>
+  <p>Have the wearer's <b>Dexcom email and password</b> ready.
+    <span class="ja">装着者のDexcomのメールとパスワードを用意してください。</span></p>
+  <ol class="steps">
+    <li><div><b>Choose your WiFi network, type its password and click Connect.</b> The board only uses 2.4 GHz
+      WiFi. If your router shows two names (e.g. one ending in 5G), choose the other one.
+      <span class="ja">WiFiを選び、パスワードを入力して「Connect」。2.4GHzのみ対応です（「5G」と付いていない方を選択）。</span></div></li>
+    <li><div><b>"Device connected to the network!" Click Visit Device.</b> The Glucoled setup page opens in a
+      new tab. (The board's screen also shows its address and a QR code for a phone on the same WiFi.)
+      <span class="ja">「Device connected to the network!」と出たら「Visit Device」。新しいタブで設定画面が開きます。</span></div></li>
+    <li><div><b>Enter the Dexcom email and password, choose the region</b> (<b>Japan</b> for Japanese accounts),
+      then click <b>Save and restart</b>. Leave Nightscout empty if you don't use it. You can also add your phone's
+      hotspot here, for the car.
+      <span class="ja">Dexcomのメールとパスワードを入力、地域は「Japan / 日本」を選んで「保存して再起動」。Nightscoutは空欄でOK。車で使うならスマホのテザリングもここで追加。</span></div>
+      <img class="phone" src="img/8-form-save.jpg" alt="Setup page: region Japan, Nightscout empty, time zone Japan, Save and restart button"></li>
+    <li><div><b>Your number appears within about 20 seconds.</b> Unplug the board and power it from any USB charger.
+      <span class="ja">約20秒で血糖値が表示されます。パソコンから外して、USB充電器につないでください。</span></div></li>
+  </ol>
+
+  <h2>Or set it up with your phone <span class="ja">スマホで設定する場合</span></h2>
+  <p>If the WiFi window didn't appear (or you clicked Skip), the board shows a QR code instead. It can be powered from
+    any USB charger for this.
+    <span class="ja">WiFiの画面が出なかった（またはSkipした）場合は、ボードにQRコードが表示されます。USB充電器につないでもOKです。</span></p>
+  <div class="tip"><b>Write these down first.</b> While the phone is on Glucoled-Setup it has no internet, so you can't
+    look anything up until you tap Save: the <b>name and password of each WiFi</b> you want (home, phone hotspot…) and
+    the wearer's <b>Dexcom email and password</b>.<br>
+    <span class="ja">先にメモ：Glucoled-Setupに接続中はスマホがネットにつながりません。使うWiFiすべての名前とパスワード、装着者のDexcomのメールとパスワードを手元に用意してください。</span></div>
   <ol class="steps">
     <li><div><b>Scan the QR code on the board</b> with the phone camera and tap <b>Join "Glucoled-Setup"</b>.
       <span class="ja">ボードのQRコードをカメラで読み取り、「Glucoled-Setup」に接続。</span></div>
@@ -120,12 +144,8 @@
       want it in the car). If the page doesn't open, open <code>192.168.4.1</code> in the browser.
       <span class="ja">設定画面が開きます。WiFi名とパスワードを入力（自宅、車で使うならスマホのテザリングも）。開かない場合はブラウザで192.168.4.1。</span></div>
       <img class="phone" src="img/7-form-wifi.jpg" alt="Setup page: four WiFi name and password rows"></li>
-    <li><div><b>Enter the Dexcom email and password, choose the region</b> (<b>Japan</b> for Japanese accounts),
-      then tap <b>Save and restart</b>. Leave Nightscout empty if you don't use it.
-      <span class="ja">Dexcomのメールとパスワードを入力、地域は「Japan / 日本」を選んで「保存して再起動」。Nightscoutは空欄でOK。</span></div>
-      <img class="phone" src="img/8-form-save.jpg" alt="Setup page: region Japan, Nightscout empty, time zone Japan, Save and restart button"></li>
-    <li><div><b>Your number appears within about 20 seconds.</b> Reconnect your phone to your normal WiFi.
-      <span class="ja">約20秒で血糖値が表示されます。スマホのWiFiを元に戻してください。</span></div></li>
+    <li><div><b>Enter Dexcom as above and tap Save and restart.</b> Then reconnect your phone to your normal WiFi.
+      <span class="ja">上と同じくDexcomを入力して「保存して再起動」。スマホのWiFiを元に戻してください。</span></div></li>
   </ol>
 
   <div class="tip"><b>"No WiFi. Hold the button 6 s for setup"?</b> The WiFi name or password is wrong, or it's a
