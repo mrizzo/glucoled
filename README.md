@@ -13,10 +13,15 @@ straight from **Dexcom Share** (including Japanese Dexcom accounts):
 
 Open-source software on an off-the-shelf board. No subscription, no soldering, no programming.
 
+**Built by someone who wears the sensor.** No alarms, no followers, no "are you ok?" texts.
+Just your number, when you want to look.
+
 <p align="center">
   <img src="docs/ideaspark.jpg" alt="Glucoled on the ideaspark ESP32 1.9-inch board on a desk, showing 19:04, NS and a green 93 with a flat arrow" width="49%">
   <img src="docs/tdisplay-s3.jpg" alt="Glucoled on a LilyGO T-Display S3 mounted on a motorcycle dash at night, showing a green 96 with a flat arrow" width="49%">
 </p>
+
+<p align="center"><b>Temperature. Oil pressure. Fuel. Speed. Blood sugar.</b><br>Just another gauge on the dash.</p>
 
 - Number and arrow are **coloured by range**, like Loop Follow's time-in-range chart:
   red under 54, darker red 54–69, green 70–180, yellow 181–250, orange over 250
