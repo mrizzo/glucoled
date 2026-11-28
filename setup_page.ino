@@ -1,5 +1,5 @@
 // Setup page: the board makes its own WiFi network, the phone joins it (scan the QR code on
-// the screen), and a form opens for WiFi + Nightscout/Dexcom + time zone. Saving stores it on
+// the screen), and a form opens for WiFi + Dexcom/Libre/Nightscout + time zone. Saving stores it on
 // the board and restarts. Runs only in setup mode: no web server is left running normally.
 //
 // Setup mode starts on first boot (nothing set) or when the button is held 6 s.
@@ -127,8 +127,17 @@ void sendForm(const String& error) {
     h += String("<option value=") + r[0] + (regionSet && cfg.dexRegion == r[0] ? " selected" : "") + ">" + r[1] + "</option>";
   h += "</select>";
 
+  h += "<h2>FreeStyle Libre</h2><p class=s>Only if you wear a Libre 2 or 3. In the FreeStyle "
+       "LibreLink app, share with an email (アプリ連携済み → リブレLinkUp), make a LibreLinkUp account "
+       "for it, and enter <b>that</b> login here. Leave empty if you use Dexcom.<br>"
+       "リブレの方のみ：リブレLinkUpアカウントのメールとパスワード。</p>";
+  h += "<label>LibreLinkUp email</label><input name=lu type=email autocapitalize=off autocorrect=off value=\"" +
+       esc(cfg.libreUser) + "\">";
+  h += "<label>LibreLinkUp password</label><input name=lp type=password placeholder=\"" +
+       String(cfg.librePass.length() ? "(unchanged)" : "") + "\">";
+
   h += "<h2>Nightscout (optional)</h2><p class=s>If you also run Nightscout, it's asked first and "
-       "Dexcom becomes the backup. Leave empty to use Dexcom only.</p>";
+       "Dexcom or Libre becomes the backup. Leave empty if you don't use it.</p>";
   h += "<label>Nightscout address</label><input name=nh autocapitalize=off autocorrect=off "
        "placeholder=\"yoursite.example.com\" value=\"" + esc(cfg.nsHost) + "\">";
   h += "<label>Token (only if your site needs one; never the API secret)</label><input name=nt "
@@ -181,6 +190,10 @@ void handleSave() {
   c.dexUser = du;
   if (setupWeb.arg("dp").length()) c.dexPass = setupWeb.arg("dp");
   c.dexRegion = setupWeb.arg("dr");
+  String lu = setupWeb.arg("lu"); lu.trim();
+  if (lu != old.libreUser) c.librePass = "";       // new account: don't reuse the old password
+  c.libreUser = lu;
+  if (setupWeb.arg("lp").length()) c.librePass = setupWeb.arg("lp");
   c.nsHost = cleanHost(setupWeb.arg("nh"));
   if (!c.nsHost.length()) c.nsToken = "";
   if (setupWeb.arg("nt").length()) { c.nsToken = setupWeb.arg("nt"); c.nsToken.trim(); }
@@ -192,15 +205,17 @@ void handleSave() {
 
   if (n == 0) { cfg = c; return sendForm("Add at least one WiFi network."); }
   bool dex = c.dexUser.length() && c.dexPass.length(), ns = c.nsHost.length();
+  bool libre = c.libreUser.length() && c.librePass.length();
   if (c.dexUser.length() && !c.dexPass.length()) { cfg = c; return sendForm("Enter the Dexcom password."); }
   if (c.dexUser.length() && !c.dexRegion.length()) { cfg = c; return sendForm("Choose the Dexcom account region (Japan for Japanese accounts). / Dexcomの地域を選んでください。"); }
   if (!c.dexRegion.length()) c.dexRegion = "us";
-  if (!dex && !ns) { cfg = c; return sendForm("Fill in Dexcom or Nightscout (or both)."); }
+  if (c.libreUser.length() && !c.librePass.length()) { cfg = c; return sendForm("Enter the LibreLinkUp password."); }
+  if (!dex && !ns && !libre) { cfg = c; return sendForm("Fill in Dexcom, Libre or Nightscout."); }
 
   cfg = c;
   saveConfig();
-  logf("setup: saved %d WiFi network(s), %s%s%s", n, dex ? "Dexcom " : "", dex ? c.dexRegion.c_str() : "",
-       ns ? (dex ? " + Nightscout" : "Nightscout") : "");
+  logf("setup: saved %d WiFi network(s),%s%s%s%s", n, dex ? " Dexcom " : "", dex ? c.dexRegion.c_str() : "",
+       libre ? " Libre" : "", ns ? " Nightscout" : "");
   setupWeb.send(200, "text/html; charset=utf-8", String(FPSTR(PAGE_HEAD)) +
     "<h1>Saved ✓</h1><p>Glucoled is restarting and will join your WiFi. You can close this page "
     "and reconnect your phone to your normal WiFi.</p><p>保存しました。再起動します。</p></body></html>");

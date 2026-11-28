@@ -31,6 +31,7 @@
 #include "secrets.h"                               // Normally everything is set on the setup page.
 #endif
 #include "dexcom_roots.h"
+#include "mbedtls/sha256.h"                       // LibreLinkUp wants a SHA-256 of the account ID
 
 // ---------------- settings ----------------
 // Saved on the board by the setup page (hold the button 6 s). Until something is saved there,
@@ -40,6 +41,7 @@ struct Config {
   String ssid[MAX_NETS], pass[MAX_NETS];           // WiFi networks, joined strongest-first
   String nsHost, nsToken;                          // Nightscout (token optional, read-only is enough)
   String dexUser, dexPass, dexRegion = "us";       // Dexcom Share: the sensor WEARER's login
+  String libreUser, librePass;                     // LibreLinkUp: a FOLLOWER login the wearer shares with
   String tz = "JST-9";                             // POSIX time zone for the clock
   bool mmol = false;                               // show mmol/L instead of mg/dL
   bool clock12 = false;                            // 12-hour clock (3:42 PM) instead of 24-hour
@@ -67,6 +69,7 @@ bool loadConfig() {                                // true if the setup page has
     cfg.nsHost = p.getString("nsHost", ""); cfg.nsToken = p.getString("nsToken", "");
     cfg.dexUser = p.getString("dexUser", ""); cfg.dexPass = p.getString("dexPass", "");
     cfg.dexRegion = p.getString("dexRegion", "us"); cfg.tz = p.getString("tz", "JST-9");
+    cfg.libreUser = p.getString("lbUser", ""); cfg.librePass = p.getString("lbPass", "");
     cfg.mmol = p.getBool("mmol", false);
     cfg.clock12 = p.getBool("clock12", false);
   } else {
@@ -84,6 +87,9 @@ bool loadConfig() {                                // true if the setup page has
 #endif
 #ifdef SECRET_DEXCOM_REGION
     cfg.dexRegion = SECRET_DEXCOM_REGION;
+#endif
+#if defined(SECRET_LIBRE_USER) && defined(SECRET_LIBRE_PASS)
+    cfg.libreUser = SECRET_LIBRE_USER; cfg.librePass = SECRET_LIBRE_PASS;
 #endif
 #ifdef SECRET_TZ
     cfg.tz = SECRET_TZ;
@@ -109,6 +115,7 @@ void saveConfig() {
   p.putString("nsHost", cfg.nsHost); p.putString("nsToken", cfg.nsToken);
   p.putString("dexUser", cfg.dexUser); p.putString("dexPass", cfg.dexPass);
   p.putString("dexRegion", cfg.dexRegion); p.putString("tz", cfg.tz);
+  p.putString("lbUser", cfg.libreUser); p.putString("lbPass", cfg.librePass);
   p.putBool("mmol", cfg.mmol);
   p.putBool("clock12", cfg.clock12);
   p.putBool("saved", true);
@@ -123,7 +130,7 @@ const char*    HOSTNAME  = "Glucoled";         // name shown in your router / De
 const uint32_t POLL_MS         = 60UL * 1000;   // fetch every 60s
 const uint32_t HTTP_TIMEOUT_MS = 15000;         // generous - the fix the Mini lacks
 const int      STALE_MIN       = 11;            // minutes old before it's flagged OLD
-const char*    FW_VERSION      = "0.7.1";
+const char*    FW_VERSION      = "0.8.0";
 // Release name per major version, alphabetical sugars: 0.x Glucose (beta), 1.x Dextrose, 2.x Erythrose,
 // 3.x Fructose, 4.x Galactose, ...
 const char*    FW_NAME         = "Glucose";
@@ -155,9 +162,10 @@ WiFiMulti wifiMulti;                               // joins whichever known netw
 int    lastSgv     = -1;
 int64_t lastDateMs = 0;                            // ms since 1970: too big for a 32-bit long
 String lastDir     = "NONE";
-const char* lastSrc = "";                          // where the shown reading came from: "NS" or "D"
+const char* lastSrc = "";                          // where the shown reading came from: "NS", "D" or "L"
 struct Reading { int sgv = -1; int64_t dateMs = 0; String dir = "NONE"; };
-Reading got;                                       // filled by nsFetch()/dexFetch()
+const int SRC_NS = 0, SRC_DEX = 1, SRC_LIBRE = 2;   // where a reading comes from
+Reading got;                                       // filled by nsFetch()/dexFetch()/libreFetch()
 uint32_t lastPoll  = 0;
 int    lastClockMin = -1;                          // minute last drawn, so the clock redraws once a minute
 const int CLOCK_H  = 34;                           // clock strip at the top of the screen
@@ -166,9 +174,9 @@ const int CLOCK_H  = 34;                           // clock strip at the top of 
 int      nsCode     = 0;                           // scratch: HTTP code of the source being fetched
 String   nsErr      = "";                          // scratch: why it failed ("" = ok)
 struct SrcStat { int code = 0; uint32_t ms = 0, at = 0, ok = 0, fail = 0; String err; };
-SrcStat  nsStat, dexStat;                          // per source, for the debug page
+SrcStat  nsStat, dexStat, libreStat;               // per source, for the debug page
 #ifndef DEX_BACKUP_MIN
-#define DEX_BACKUP_MIN 6                           // ask Dexcom when Nightscout's reading is this old
+#define DEX_BACKUP_MIN 6                           // ask Dexcom/Libre when Nightscout's reading is this old
 #endif
 bool     debugPage  = false;
 uint32_t debugAt    = 0;
@@ -268,6 +276,8 @@ void bleStop() {
 
 bool useDexcom() { return usable(cfg.dexUser) && usable(cfg.dexPass); }
 bool useNs()     { return usable(cfg.nsHost); }
+bool useLibre()  { return usable(cfg.libreUser) && usable(cfg.librePass); }
+bool useAny()    { return useNs() || useDexcom() || useLibre(); }
 
 void addNetworks() {
   WiFi.setHostname(HOSTNAME);                      // must be set before WiFi starts
@@ -292,21 +302,24 @@ void connectWiFi() {
 
 bool nsFetch();
 bool dexFetch();
+bool libreFetch();
 long ageOf(int64_t dateMs);
 bool fetchNoRetry = false;                         // set for errors a retry can't fix (bad login, no clock)
 
 // Fetch one source into `got`, with one quick retry, and record its stats.
-bool runSource(bool dex) {
-  SrcStat& st = dex ? dexStat : nsStat;
-  const char* tag = dex ? "dex" : "ns";
+bool fetchFrom(int s) { return s == SRC_DEX ? dexFetch() : s == SRC_LIBRE ? libreFetch() : nsFetch(); }
+
+bool runSource(int src) {
+  SrcStat& st = src == SRC_DEX ? dexStat : src == SRC_LIBRE ? libreStat : nsStat;
+  const char* tag = src == SRC_DEX ? "dex" : src == SRC_LIBRE ? "libre" : "ns";
   uint32_t t0 = millis();
   got = Reading(); nsCode = 0; nsErr = ""; fetchNoRetry = false;
-  bool ok = dex ? dexFetch() : nsFetch();
+  bool ok = fetchFrom(src);
   if (!ok && !fetchNoRetry && WiFi.status() == WL_CONNECTED) {  // a blip shouldn't cost a minute
     logf("%s: retry after: %s", tag, nsErr.c_str());
     delay(2000);
     got = Reading(); nsCode = 0; nsErr = ""; fetchNoRetry = false;
-    ok = dex ? dexFetch() : nsFetch();
+    ok = fetchFrom(src);
   }
   st.ms = millis() - t0; st.at = millis(); st.code = nsCode; st.err = ok ? "" : nsErr;
   if (ok) {
@@ -320,22 +333,27 @@ bool runSource(bool dex) {
 }
 
 // Nightscout first (fast when the uploader is working). If its reading is missing or
-// DEX_BACKUP_MIN+ minutes old (uploader missed one), also ask Dexcom, and show the newer.
-// With only one source set, just that one is used.
+// DEX_BACKUP_MIN+ minutes old (uploader missed one), also ask Dexcom and/or Libre, and show
+// the newest. With only one source set, just that one is used.
 bool fetch() {
   if (WiFi.status() != WL_CONNECTED) {
     connectWiFi();
     if (WiFi.status() != WL_CONNECTED) { logf("fetch: no wifi"); return false; }
   }
-  if (!useNs() && !useDexcom()) { logf("fetch: no data source set (hold the button 6 s for setup)"); return false; }
+  if (!useAny()) { logf("fetch: no data source set (hold the button 6 s for setup)"); return false; }
 
-  Reading ns, dx;
-  bool nsOk = false, dxOk = false;
-  if (useNs() && (nsOk = runSource(false))) ns = got;
+  Reading ns, dx, lb;
+  bool nsOk = false, dxOk = false, lbOk = false;
+  if (useNs() && (nsOk = runSource(SRC_NS))) ns = got;
   long nsAge = nsOk ? ageOf(ns.dateMs) : -1;
-  if (useDexcom() && (!nsOk || nsAge < 0 || nsAge >= DEX_BACKUP_MIN)) {
+  bool needBackup = !nsOk || nsAge < 0 || nsAge >= DEX_BACKUP_MIN;
+  if (useDexcom() && needBackup) {
     if (useNs()) logf("dex: asking Dexcom, Nightscout %s", nsOk ? (String("reading is ") + nsAge + " min old").c_str() : "failed");
-    if ((dxOk = runSource(true))) dx = got;
+    if ((dxOk = runSource(SRC_DEX))) dx = got;
+  }
+  if (useLibre() && needBackup) {
+    if (useNs()) logf("libre: asking LibreLinkUp, Nightscout %s", nsOk ? (String("reading is ") + nsAge + " min old").c_str() : "failed");
+    if ((lbOk = runSource(SRC_LIBRE))) lb = got;
   }
 
   const Reading* best = nullptr; const char* src = "";
@@ -343,6 +361,7 @@ bool fetch() {
   // Same reading from both sources has slightly different timestamps, so Dexcom must be a
   // minute newer to win; otherwise prefer Nightscout.
   if (dxOk && (!best || dx.dateMs > best->dateMs + 60000)) { best = &dx; src = "D"; }
+  if (lbOk && (!best || lb.dateMs > best->dateMs + 60000)) { best = &lb; src = "L"; }
   if (!best) { logf("fetch: no source answered (keeping last value)"); return false; }
   if (best->dateMs >= lastDateMs) {                // never step back to an older reading
     if (strcmp(src, lastSrc)) logf("show: now from %s", src);
@@ -533,6 +552,166 @@ bool dexFetch() {
   return false;
 }
 
+// ---------------- FreeStyle Libre (LibreLinkUp) ----------------
+// The unofficial API the LibreLinkUp follower app uses (same flow as pylibrelinkup and
+// nightscout-librelink-up): log in -> token (following a redirect to the account's region,
+// e.g. api-jp.libreview.io), then read the newest reading from /llu/connections.
+// Uses a FOLLOWER login: the wearer invites that email from the FreeStyle LibreLink app.
+// This sends a password, so the certificate is verified (standard root CAs).
+#ifndef LIBRE_APP_VERSION
+#define LIBRE_APP_VERSION "4.16.0"                 // LibreView refuses logins from app versions it considers too old
+#endif
+String   llHost = "api.libreview.io";              // switched to the account's region after the first login
+String   llToken, llAccountId;                     // never logged
+bool     llLoginLocked  = false;                   // login refused: stop trying (avoids locking the account)
+uint32_t llLoginRetryAt = 0;
+
+int llRequest(bool post, const String& path, const String& body, String& out) {
+  WiFiClientSecure c;
+  c.setCACertBundle(rootca_crt_bundle_start, rootca_crt_bundle_end - rootca_crt_bundle_start);
+  HTTPClient http;
+  out = "";
+  if (!http.begin(c, "https://" + llHost + path)) return -100;
+  http.setConnectTimeout(8000);
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Accept", "application/json");
+  http.addHeader("product", "llu.android");
+  http.addHeader("version", LIBRE_APP_VERSION);
+  if (llToken.length()) {
+    http.addHeader("Authorization", "Bearer " + llToken);
+    http.addHeader("account-id", llAccountId);
+  }
+  int code = post ? http.POST(body) : http.GET();
+  if (code > 0) out = http.getString();
+  else {
+    char e[100] = "";
+    int te = c.lastError(e, sizeof e);
+    logf("libre: connect to %s failed: %s (tls %d: %s, heap %u)", llHost.c_str(),
+         HTTPClient::errorToString(code).c_str(), te, e, ESP.getFreeHeap());
+  }
+  http.end();
+  return code;
+}
+
+String sha256Hex(const String& s) {
+  uint8_t h[32];
+  mbedtls_sha256((const uint8_t*)s.c_str(), s.length(), h, 0);
+  char hex[65];
+  for (int i = 0; i < 32; i++) sprintf(hex + i * 2, "%02x", h[i]);
+  return String(hex);
+}
+
+bool llLoginFailed(const String& why, bool lock) {
+  fetchNoRetry = true;
+  if (lock) llLoginLocked = true;
+  else llLoginRetryAt = millis() + 5UL * 60 * 1000;
+  nsErr = why;
+  return false;
+}
+
+bool libreLogin() {
+  if (llLoginLocked) { nsErr = "Libre login refused earlier. Fix it on the setup page"; fetchNoRetry = true; return false; }
+  if ((int32_t)(millis() - llLoginRetryAt) < 0 && llLoginRetryAt) { nsErr = "Libre login: waiting to retry"; fetchNoRetry = true; return false; }
+  llToken = ""; llAccountId = "";
+  JsonDocument req; String body;
+  req["email"] = cfg.libreUser; req["password"] = cfg.librePass;
+  serializeJson(req, body);
+  JsonDocument filter;
+  filter["status"] = true;
+  filter["data"]["redirect"] = true; filter["data"]["region"] = true;
+  filter["data"]["authTicket"]["token"] = true;
+  filter["data"]["user"]["id"] = true;
+  filter["data"]["step"]["type"] = true;
+  filter["error"]["message"] = true;
+  for (int hop = 0; hop < 2; hop++) {              // at most one redirect to the account's region
+    String out;
+    int code = llRequest(true, "/llu/auth/login", body, out);
+    nsCode = code;
+    if (code < 0) { nsErr = "LibreView unreachable (" + HTTPClient::errorToString(code) + ")"; return false; }
+    if (code == 429) return llLoginFailed("LibreView: too many requests, retry in 5 min", false);
+    JsonDocument d;
+    if (deserializeJson(d, out, DeserializationOption::Filter(filter)))
+      return llLoginFailed("Libre login: unexpected answer (HTTP " + String(code) + "), retry in 5 min", false);
+    int status = d["status"] | -1;
+    JsonObject data = d["data"];
+    if (status == 0 && (data["redirect"] | false)) {
+      const char* region = data["region"] | "";
+      if (!region[0]) break;
+      llHost = String("api-") + region + ".libreview.io";
+      logf("libre: account is in region %s", region);
+      continue;
+    }
+    const char* token = data["authTicket"]["token"] | "";
+    const char* uid = data["user"]["id"] | "";
+    if (status == 0 && token[0] && uid[0]) {
+      llToken = token; llAccountId = sha256Hex(uid);
+      logf("libre: logged in (%s)", llHost.c_str());
+      return true;
+    }
+    if (status == 4) {                             // the account must accept something in the app first
+      const char* step = data["step"]["type"] | "?";
+      return llLoginFailed(String("Libre: open the LibreLinkUp app and accept the ") +
+                           (strcmp(step, "tou") == 0 ? "terms of use" : strcmp(step, "pp") == 0 ? "privacy policy" : step), true);
+    }
+    if (status == 2) return llLoginFailed("Libre login refused. Check the LibreLinkUp email/password", true);
+    if (status == 920) return llLoginFailed("LibreView wants a newer app version: Glucoled needs an update", true);
+    const char* msg = d["error"]["message"] | "";
+    return llLoginFailed("Libre login failed (status " + String(status) + (msg[0] ? String(" ") + msg : String("")) +
+                         "), retry in 5 min", false);
+  }
+  return llLoginFailed("Libre login: bad redirect, retry in 5 min", false);
+}
+
+// "11/28/2026 6:42:10 AM" (FactoryTimestamp, UTC) -> ms since 1970
+int64_t llParseUtc(const char* s) {
+  int mo, d, y, h, mi, se; char ap[3] = "";
+  if (sscanf(s, "%d/%d/%d %d:%d:%d %2s", &mo, &d, &y, &h, &mi, &se, ap) < 6) return 0;
+  if (ap[0] == 'P' && h < 12) h += 12;
+  if (ap[0] == 'A' && h == 12) h = 0;
+  // days since 1970-01-01 (Howard Hinnant's days_from_civil)
+  y -= mo <= 2;
+  int era = (y >= 0 ? y : y - 399) / 400;
+  unsigned yoe = (unsigned)(y - era * 400);
+  unsigned doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+  unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  int64_t days = (int64_t)era * 146097 + (int64_t)doe - 719468;
+  return ((days * 86400) + h * 3600 + mi * 60 + se) * 1000LL;
+}
+
+bool libreFetch() {
+  if (time(nullptr) < 1000000000L) { nsErr = "waiting for clock"; fetchNoRetry = true; return false; }
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (!llToken.length() && !libreLogin()) return false;
+    String out;
+    int code = llRequest(false, "/llu/connections", "", out);
+    nsCode = code;
+    if (code == 401 && attempt == 0) { logf("libre: token expired, logging in again"); llToken = ""; continue; }
+    if (code != 200) {
+      nsErr = code < 0 ? HTTPClient::errorToString(code) : "HTTP " + String(code);
+      return false;
+    }
+    JsonDocument filter;
+    filter["status"] = true;
+    JsonObject gm = filter["data"][0]["glucoseMeasurement"].to<JsonObject>();
+    gm["ValueInMgPerDl"] = true; gm["TrendArrow"] = true; gm["FactoryTimestamp"] = true;
+    JsonDocument doc;
+    if (deserializeJson(doc, out, DeserializationOption::Filter(filter))) { nsErr = "json"; return false; }
+    JsonArray conns = doc["data"];
+    if (conns.size() < 1) { nsErr = "nobody shares with this LibreLinkUp account"; fetchNoRetry = true; return false; }
+    JsonObject m = conns[0]["glucoseMeasurement"];
+    float v = m["ValueInMgPerDl"] | -1.0f;
+    int64_t ms = llParseUtc(m["FactoryTimestamp"] | "");
+    if (v < 0 || ms == 0) { nsErr = "unexpected reading format"; return false; }
+    static const char* const TRENDS[] = {"NONE", "SingleDown", "FortyFiveDown", "Flat", "FortyFiveUp", "SingleUp"};
+    int t = m["TrendArrow"] | 0;
+    got.sgv = (int)(v + 0.5f); got.dateMs = ms;
+    got.dir = (t >= 1 && t <= 5) ? TRENDS[t] : "NONE";
+    return true;
+  }
+  return false;
+}
+
 long ageOf(int64_t dateMs) {
   time_t now = time(nullptr);
   if (now < 1000000000L || dateMs == 0) return -1;      // NTP not ready
@@ -567,7 +746,7 @@ void drawClock() {
     tft.setTextColor(bleConnected ? TFT_CYAN : TFT_BLUE, TFT_BLACK);
     tft.drawString("BT", 6, 6);
   }
-  if (lastSrc[0]) {                                // where the number came from: NS or D (Dexcom)
+  if (lastSrc[0]) {                                // where the number came from: NS, D (Dexcom) or L (Libre)
     tft.setTextFont(2); tft.setTextSize(1); tft.setTextDatum(TR_DATUM);
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     tft.drawString(lastSrc, tft.width() - 6, 6);
@@ -640,7 +819,7 @@ void render() {
     drawArrow(dbl ? ax - 12 : ax, ay, lastDir, col);
     if (dbl) drawArrow(ax + 12, ay, lastDir, col);  // two arrows for fast rise/fall
   }
-  if (WiFi.status() != WL_CONNECTED || (!useNs() && !useDexcom())) {   // say how to fix it
+  if (WiFi.status() != WL_CONNECTED || !useAny()) {   // say how to fix it
     tft.setTextFont(2); tft.setTextSize(1); tft.setTextDatum(BC_DATUM);
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);
     tft.drawString(WiFi.status() != WL_CONNECTED ? "No WiFi. Hold the button 6 s for setup"
@@ -696,8 +875,10 @@ void drawDebug() {
   };
   srcLine("NS    ", useNs(), nsStat, "no fetch yet");
   srcLine("Dex   ", useDexcom(), dexStat, useNs() ? "backup, not needed yet" : "no fetch yet");
+  srcLine("Libre ", useLibre(), libreStat, useNs() ? "backup, not needed yet" : "no fetch yet");
   line(TFT_WHITE, "OK/fail  NS " + String(nsStat.ok) + "/" + String(nsStat.fail) +
-                  "   Dex " + String(dexStat.ok) + "/" + String(dexStat.fail));
+                  "   Dex " + String(dexStat.ok) + "/" + String(dexStat.fail) +
+                  "   Libre " + String(libreStat.ok) + "/" + String(libreStat.fail));
   long age = ageMinutes();
   line(TFT_WHITE, "Reading  " + (lastSgv < 0 ? String("--") : sgvText(lastSgv) + " " + lastDir) +
                   (age < 0 ? String("") : ", " + String(age) + "m old") +
@@ -770,14 +951,13 @@ void setup() {
   tft.drawString("Connecting WiFi...", 10, 10);
   logf("boot: Glucoled %s %s %s on %s, reset: %s", FW_VERSION, FW_NAME, FW_COMMIT, ARDUINO_BOARD, resetReason());
   logf("settings: %s", loadConfig() ? "from setup page" : "defaults (nothing saved yet)");
-  if (!haveWifi() || (!useNs() && !useDexcom())) enterSetup("not set up yet");   // first boot
-  if (useNs() && useDexcom()) logf("source: Nightscout, Dexcom (%s) as backup", cfg.dexRegion.c_str());
-  else if (useDexcom())       logf("source: Dexcom Share, region %s", cfg.dexRegion.c_str());
-  else                        logf("source: Nightscout");
+  if (!haveWifi() || !useAny()) enterSetup("not set up yet");   // first boot
+  logf("source:%s%s%s%s", useNs() ? " Nightscout" : "", useDexcom() ? (String(" Dexcom (") + cfg.dexRegion + ")").c_str() : "",
+       useLibre() ? " LibreLinkUp" : "", useNs() && (useDexcom() || useLibre()) ? ", backup after Nightscout" : "");
   addNetworks();
   connectWiFi();
   configTzTime(cfg.tz.c_str(), "pool.ntp.org", "time.google.com");  // age uses the UTC epoch; TZ only affects the clock
-  if (useDexcom())                                 // Dexcom's certificate check needs the date
+  if (useDexcom() || useLibre())                   // certificate checks need the date
     for (uint32_t t0 = millis(); time(nullptr) < 1000000000L && millis() - t0 < 10000; ) delay(100);
   fetch();
   render();                                        // shows "--" if the first fetch failed

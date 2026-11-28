@@ -17,6 +17,8 @@
 // #define SECRET_DEXCOM_USER   "you@example.com"
 // #define SECRET_DEXCOM_PASS   "your-dexcom-password"
 // #define SECRET_DEXCOM_REGION "jp"   // "us", "ous" (outside the US) or "jp" (Japan)
+// #define SECRET_LIBRE_USER    "follower@example.com"   // LibreLinkUp (follower) login, for Libre 2/3
+// #define SECRET_LIBRE_PASS    "your-librelinkup-password"
 // #define SECRET_TZ "PST8PDT,M3.2.0,M11.1.0"   // optional clock time zone (default JST-9)
 // #define SECRET_MMOL                           // optional: show mmol/L instead of mg/dL
 // #define SECRET_CLOCK12                        // optional: 12-hour clock (3:42 PM)
